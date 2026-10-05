@@ -115,6 +115,7 @@ jobs:
           pattern: matillion-diff-*
           path: dist
           merge-multiple: true
+          skip-decompress: true
 
       - name: Publish release
         env:
