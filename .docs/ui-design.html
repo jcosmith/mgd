@@ -1,0 +1,1152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matillion Diff UI</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --surface: #ffffff; --surface-2: #f3f1ed; --surface-3: #ebe8e2;
+    --text: #1f1d1a; --muted: #6b665e; --border: #e2ded6;
+    --accent: #2f5fd0; --accent-soft: #e6edfb; --code-bg: #f5f3ef;
+    --app-bg: #f7f6f3;
+
+    --add: #1e7a3c;   --add-bg: #e3f4e8;
+    --del: #b3261e;   --del-bg: #fbe6e4;
+    --mod: #9a6200;   --mod-bg: #fdf1d8;
+    --ren: #6b3fb5;   --ren-bg: #efe8fb;
+    --lay: #5c6773;   --lay-bg: #eceff2;
+
+    --cat-flow: #64748b; --cat-iter: #5b5bd6; --cat-read: #1d75c9; --cat-xform: #0f8a8a;
+    --cat-write: #8a5a3c; --cat-script: #a3338f; --cat-var: #6b7a1f;
+
+    --radius: 10px;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161514; --surface: #1e1d1b; --surface-2: #262522; --surface-3: #2f2d29;
+      --text: #ebe8e2; --muted: #a39d93; --border: #36342f;
+      --accent: #7fa2ff; --accent-soft: #23304d; --code-bg: #232220; --app-bg: #1a1918;
+      --add: #6fcf8a; --add-bg: #1d3325; --del: #ff8a80; --del-bg: #3a1f1d;
+      --mod: #f0b85a; --mod-bg: #3a2e17; --ren: #c3a4ff; --ren-bg: #2d2540; --lay: #a9b4bf; --lay-bg: #262b31;
+      --cat-flow: #94a3b8; --cat-iter: #9a9cff; --cat-read: #5fa8ff; --cat-xform: #3cc5c5;
+      --cat-write: #c9946f; --cat-script: #e07ad0; --cat-var: #b5c45a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161514; --surface: #1e1d1b; --surface-2: #262522; --surface-3: #2f2d29;
+    --text: #ebe8e2; --muted: #a39d93; --border: #36342f;
+    --accent: #7fa2ff; --accent-soft: #23304d; --code-bg: #232220; --app-bg: #1a1918;
+    --add: #6fcf8a; --add-bg: #1d3325; --del: #ff8a80; --del-bg: #3a1f1d;
+    --mod: #f0b85a; --mod-bg: #3a2e17; --ren: #c3a4ff; --ren-bg: #2d2540; --lay: #a9b4bf; --lay-bg: #262b31;
+    --cat-flow: #94a3b8; --cat-iter: #9a9cff; --cat-read: #5fa8ff; --cat-xform: #3cc5c5;
+      --cat-write: #c9946f; --cat-script: #e07ad0; --cat-var: #b5c45a;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- page chrome ---------- */
+  .topnav {
+    position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(6px); border-bottom: 1px solid var(--border);
+  }
+  .topnav-inner { max-width: 1180px; margin: 0 auto; padding: 10px 24px; display: flex; gap: 6px; align-items: center; overflow-x: auto; }
+  .topnav .brand { font-weight: 650; margin-right: 12px; white-space: nowrap; }
+  .topnav a { white-space: nowrap; text-decoration: none; color: var(--muted); font-size: 14px; padding: 4px 10px; border-radius: 6px; }
+  .topnav a:hover { background: var(--surface-2); color: var(--text); }
+  .topnav a.active { background: var(--accent-soft); color: var(--accent); }
+  .topnav .spacer { flex: 1; }
+  .btn {
+    font: inherit; font-size: 13px; background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface-2); }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 40px 24px 120px; }
+  h1 { font-size: 34px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .lede { font-size: 18px; max-width: 74ch; }
+  section { padding-top: 28px; margin-top: 36px; border-top: 1px solid var(--border); scroll-margin-top: 56px; }
+  h2 { font-size: 26px; margin: 0 0 6px; }
+  h2 .num { color: var(--muted); font-weight: 400; margin-right: 6px; }
+  h3 { font-size: 18px; margin: 24px 0 8px; }
+  p, li { max-width: 80ch; }
+  .tagline { color: var(--muted); font-size: 17px; margin: 0 0 16px; }
+
+  .pros-cons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+  .pc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 14px; }
+  .pc h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .pc ul { margin: 0; padding-left: 18px; }
+  .pc.good h4 { color: var(--add); } .pc.bad h4 { color: var(--del); }
+
+  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; }
+  .principle { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .principle b { display: block; margin-bottom: 4px; }
+  .principle span { color: var(--muted); font-size: 14px; }
+
+  table.plain { border-collapse: collapse; width: 100%; font-size: 14px; margin: 12px 0; }
+  table.plain th, table.plain td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.plain th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .table-wrap { overflow-x: auto; }
+  .dots { letter-spacing: 2px; color: var(--accent); white-space: nowrap; }
+  .dots .off { color: var(--border); }
+  kbd {
+    font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
+  }
+
+  /* ---------- design tokens showcase ---------- */
+  .tokens { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 12px 0; }
+  .token { border-radius: var(--radius); padding: 10px 12px; border: 1px solid var(--border); background: var(--surface); }
+  .token .sw { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .token .gl { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; }
+  .token small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 4px; line-height: 1.4; }
+
+  .k-add { color: var(--add); background: var(--add-bg); }
+  .k-del { color: var(--del); background: var(--del-bg); }
+  .k-mod { color: var(--mod); background: var(--mod-bg); }
+  .k-ren { color: var(--ren); background: var(--ren-bg); }
+  .k-lay { color: var(--lay); background: var(--lay-bg); }
+
+  /* ---------- mock window ---------- */
+  .mock-scroll { overflow-x: auto; margin: 18px 0 8px; padding-bottom: 4px; }
+  .win {
+    min-width: 900px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    background: var(--app-bg); font-size: 12.5px; line-height: 1.45; box-shadow: 0 8px 28px rgba(0,0,0,.08);
+  }
+  .win-title { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--surface-2); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .win-title .wdots { display: flex; gap: 6px; }
+  .win-title .wdots i { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-3); display: block; }
+  .win-title .wt { flex: 1; text-align: center; }
+  .appbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .repo { font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .repo .ro { font-size: 10.5px; font-weight: 600; color: var(--add); border: 1px solid var(--add); border-radius: 4px; padding: 0 5px; }
+  .rev { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-2); border-radius: 6px; padding: 3px 8px; font-family: var(--mono); font-size: 12px; }
+  .rev b { font-family: var(--sans); font-weight: 600; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .swap { color: var(--muted); }
+  .appbar .grow { flex: 1; }
+  .variant { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; }
+  .warn-na { font-size: 11px; font-weight: 600; color: var(--mod); border: 1px dashed var(--mod); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  .tgl { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; user-select: none; }
+  .tgl input { accent-color: var(--accent); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 12px; border: 0; background: var(--surface); color: var(--muted); padding: 4px 10px; cursor: pointer; border-right: 1px solid var(--border); }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+  .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 4px; font-family: var(--mono); font-weight: 700; font-size: 11px; }
+  .cnt { font-family: var(--mono); font-size: 11px; display: inline-flex; gap: 4px; }
+  .cnt .a { color: var(--add); } .cnt .d { color: var(--del); } .cnt .m { color: var(--mod); }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 0 6px; border-radius: 999px; }
+  .old { color: var(--del); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .new { color: var(--add); }
+  .mutedtxt { color: var(--muted); }
+
+  /* ---------- Proposal A: workbench ---------- */
+  .wb { display: grid; grid-template-columns: 230px 1fr 290px; height: 470px; }
+  .wb > div { overflow: auto; }
+  .wb .left { border-right: 1px solid var(--border); background: var(--surface); padding: 8px 0; }
+  .wb .right { border-left: 1px solid var(--border); background: var(--surface); padding: 12px; }
+  .sect-h { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; padding: 8px 12px 4px; }
+  .obj { display: flex; align-items: center; gap: 8px; padding: 4px 12px; cursor: pointer; }
+  .obj:hover { background: var(--surface-2); }
+  .obj.sel { background: var(--accent-soft); }
+  .obj .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .obj .folder { color: var(--muted); }
+  .tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 1; }
+  .tabs span { padding: 8px 10px; color: var(--muted); border-bottom: 2px solid transparent; cursor: default; }
+  .tabs span.on { color: var(--text); border-color: var(--accent); font-weight: 600; }
+  .center-h { padding: 10px 12px 6px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .center-h h5 { margin: 0; font-size: 15px; }
+  table.st { width: 100%; border-collapse: collapse; }
+  table.st td, table.st th { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  table.st th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; background: var(--app-bg); }
+  table.st tr.grp td { background: var(--surface); font-weight: 600; cursor: pointer; }
+  table.st tr.grp td:first-child::before { content: "▾ "; color: var(--muted); }
+  table.st tr.grp.collapsed td:first-child::before { content: "▸ "; }
+  table.st tr.prow { cursor: pointer; }
+  table.st tr.prow td:first-child { padding-left: 28px; }
+  table.st tr.prow:hover td { background: var(--surface-2); }
+  table.st tr.prow.sel td { background: var(--accent-soft); }
+  table.st tr.unch td { color: var(--muted); font-weight: 400; }
+  table.st tr.hidden { display: none; }
+  .placeholder { padding: 40px; text-align: center; color: var(--muted); }
+  .insp-h { font-weight: 650; font-size: 13px; margin-bottom: 2px; }
+  .insp-sub { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
+  .kv { display: grid; grid-template-columns: 70px 1fr; gap: 6px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+  .kv > span:first-child { color: var(--muted); }
+  .codediff { font-family: var(--mono); font-size: 11.5px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin: 6px 0; background: var(--surface); }
+  .codediff div { padding: 1px 8px; white-space: pre; }
+  .codediff .a { background: var(--add-bg); color: var(--add); }
+  .codediff .d { background: var(--del-bg); color: var(--del); }
+  .codediff .h { color: var(--muted); background: var(--surface-2); }
+  .meta-list { margin-top: 14px; font-size: 11.5px; color: var(--muted); }
+  .meta-list div { display: flex; justify-content: space-between; padding: 2px 0; }
+
+  /* ---------- Proposal B: canvas ---------- */
+  .cv-wrap { position: relative; height: 470px; display: grid; grid-template-rows: auto 1fr auto; }
+  .cv-tools { display: flex; gap: 10px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .legend { display: flex; gap: 10px; color: var(--muted); font-size: 11.5px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 14px; height: 10px; border-radius: 2px; border: 2px solid; display: inline-block; }
+  .cv-stage {
+    overflow: hidden; display: flex; gap: 0;
+    background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 16px 16px;
+  }
+  .cv-pane { flex: 1; position: relative; min-width: 0; }
+  .cv-pane + .cv-pane { border-left: 1px solid var(--border); }
+  .cv-pane .cv-label { position: absolute; top: 8px; left: 10px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; }
+  .cv-pane svg { width: 100%; height: 100%; display: block; }
+  .cv-minimap { position: absolute; right: 12px; bottom: 132px; width: 110px; height: 52px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; opacity: .9; }
+  .cv-minimap i { position: absolute; height: 5px; border-radius: 1px; }
+  .cv-drawer { background: var(--surface); border-top: 1px solid var(--border); height: 120px; overflow: auto; padding: 10px 14px; }
+  .cv-drawer h6 { margin: 0 0 6px; font-size: 13px; }
+  .drawer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; }
+  svg .cv-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; cursor: pointer; }
+  svg .cv-box.add { stroke: var(--add); stroke-width: 2.5; fill: var(--add-bg); }
+  svg .cv-box.del { stroke: var(--del); stroke-width: 2; stroke-dasharray: 5 4; fill: var(--del-bg); }
+  svg .cv-box.mod { stroke: var(--mod); stroke-width: 2.5; fill: var(--mod-bg); }
+  svg .cv-box.sel { stroke: var(--accent); stroke-width: 3; }
+  svg .cv-ghost { fill: none; stroke: var(--lay); stroke-width: 1.5; stroke-dasharray: 3 3; }
+  svg .cv-name { fill: var(--text); font: 600 12px var(--sans); pointer-events: none; }
+  svg .cv-type { fill: var(--muted); font: 10.5px var(--sans); pointer-events: none; }
+  svg .cv-edge { stroke: var(--muted); stroke-width: 1.6; fill: none; opacity: .8; }
+  svg .cv-edge.add { stroke: var(--add); stroke-width: 2.4; opacity: 1; }
+  svg .cv-edge.del { stroke: var(--del); stroke-width: 2; stroke-dasharray: 5 4; opacity: 1; }
+  svg .cv-kind { fill: var(--surface); stroke: var(--border); }
+  svg .cv-kind-t { font: 700 10px var(--sans); fill: var(--muted); }
+  svg .cv-st { font: 700 12px var(--mono); }
+  svg .cv-st.add { fill: var(--add); } svg .cv-st.del { fill: var(--del); } svg .cv-st.mod { fill: var(--mod); }
+  svg .cv-stbg { stroke: none; }
+  svg .cv-stbg.add { fill: var(--add-bg); } svg .cv-stbg.del { fill: var(--del-bg); } svg .cv-stbg.mod { fill: var(--mod-bg); }
+  svg .cv-cat-flow { fill: var(--cat-flow); } svg .cv-cat-iter { fill: var(--cat-iter); }
+  svg .cv-cat-read { fill: var(--cat-read); } svg .cv-cat-xform { fill: var(--cat-xform); }
+  svg .cv-cat-write { fill: var(--cat-write); } svg .cv-cat-script { fill: var(--cat-script); }
+  svg .cv-cat-var { fill: var(--cat-var); }
+  svg .cv-movenote { fill: var(--lay); font: 10px var(--sans); }
+
+  /* ---------- Proposal C: review feed ---------- */
+  .feed { height: 520px; overflow: auto; background: var(--app-bg); }
+  .feed-top { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--border); padding: 8px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .chips { display: flex; gap: 6px; }
+  .chipf { font: inherit; font-size: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 2px 10px; cursor: pointer; }
+  .chipf.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .progress { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; justify-content: flex-end; }
+  .bar { width: 140px; height: 6px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--add); transition: width .2s; }
+  .feed-body { max-width: 760px; margin: 0 auto; padding: 14px 16px 40px; }
+  .fobj { margin-bottom: 18px; }
+  .fobj-h { display: flex; align-items: center; gap: 8px; padding: 6px 0; position: sticky; top: 41px; background: var(--app-bg); z-index: 1; }
+  .fobj-h .title { font-weight: 650; font-size: 14px; }
+  .fobj-h .path { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
+  .fobj-h .grow { flex: 1; }
+  .fobj.done .cards { display: none; }
+  .fobj.done .fobj-h .title { color: var(--muted); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin: 6px 0; overflow: hidden; }
+  .card summary { list-style: none; cursor: pointer; padding: 8px 12px; display: flex; gap: 10px; align-items: baseline; }
+  .card summary::-webkit-details-marker { display: none; }
+  .card summary .s { flex: 1; }
+  .card summary .chev { color: var(--muted); transition: transform .15s; }
+  .card[open] summary .chev { transform: rotate(90deg); }
+  .card .body { padding: 0 12px 10px 38px; color: var(--text); }
+  .card .why { color: var(--muted); font-size: 11.5px; }
+  .card.hidden { display: none; }
+
+  /* ---------- Proposal D: history ---------- */
+  .hist { padding: 14px 16px 16px; height: 500px; overflow: auto; }
+  .hist-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .hist-h h5 { margin: 0; font-size: 15px; }
+  table.mx { border-collapse: separate; border-spacing: 3px; }
+  table.mx th { font-weight: 400; font-size: 11px; color: var(--muted); padding: 2px; vertical-align: bottom; }
+  table.mx th.c { cursor: pointer; width: 64px; text-align: center; border-radius: 6px; }
+  table.mx th.c:hover { background: var(--surface-2); }
+  table.mx th.c .sha { font-family: var(--mono); color: var(--text); display: block; }
+  table.mx th.c .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--muted); background: var(--surface); display: block; margin: 4px auto 0; }
+  table.mx th.c.inrange { background: var(--accent-soft); }
+  table.mx th.c.inrange .dot { border-color: var(--accent); background: var(--accent); }
+  table.mx th.c.base .dot { border-color: var(--accent); }
+  table.mx th.c .ref { display: inline-block; font-size: 9.5px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 0 3px; margin-top: 2px; }
+  table.mx td.rn { padding-right: 12px; white-space: nowrap; font-size: 12px; }
+  table.mx td.cell { height: 24px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); text-align: center; font-family: var(--mono); font-weight: 700; font-size: 11px; }
+  table.mx td.cell.add { background: var(--add-bg); color: var(--add); border-color: transparent; }
+  table.mx td.cell.del { background: var(--del-bg); color: var(--del); border-color: transparent; }
+  table.mx td.cell.mod { background: var(--mod-bg); color: var(--mod); border-color: transparent; }
+  table.mx td.cell.lay { background: var(--lay-bg); color: var(--lay); border-color: transparent; }
+  table.mx td.cell.inrange { outline: 2px solid var(--accent); outline-offset: -1px; }
+  table.mx td.cell.agg { background: var(--surface-2); }
+  .hist-foot { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .hist-foot .msg { font-weight: 600; }
+
+  /* ---------- Proposal E: text ---------- */
+  .tx { height: 440px; overflow: auto; background: var(--surface); font-family: var(--mono); font-size: 12px; }
+  table.tdiff { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  table.tdiff td { padding: 0 8px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  table.tdiff td.ln { width: 40px; color: var(--muted); text-align: right; user-select: none; background: var(--app-bg); }
+  table.tdiff td.gut { width: 18px; text-align: center; padding: 0; }
+  table.tdiff td.del { background: var(--del-bg); color: var(--del); }
+  table.tdiff td.add { background: var(--add-bg); color: var(--add); }
+  table.tdiff td.empty { background: repeating-linear-gradient(135deg, var(--surface-2) 0 4px, var(--surface) 4px 8px); }
+  table.tdiff td.sep { border-left: 1px solid var(--border); }
+
+  /* ---------- recommendation diagram ---------- */
+  .compose { display: grid; grid-template-columns: 200px 1fr; gap: 10px; margin: 16px 0; }
+  .compose .cbox { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-size: 14px; }
+  .compose .cbox b { display: block; }
+  .compose .cbox small { color: var(--muted); }
+  .compose .ctabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .compose .ctab { border: 1px dashed var(--border); border-radius: 8px; padding: 8px; font-size: 13px; }
+  .compose .ctab.default { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+
+  @media (max-width: 860px) {
+    main { padding: 24px 16px 80px; }
+    .topnav-inner { padding: 8px 16px; }
+    h1 { font-size: 27px; }
+    .pros-cons { grid-template-columns: 1fr; }
+    .compose { grid-template-columns: 1fr; }
+    .compose .ctabs { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav" aria-label="Sections">
+  <div class="topnav-inner" id="nav">
+    <span class="brand">Matillion Diff · UI</span>
+    <a href="#principles">Principles</a>
+    <a href="#language">Design language</a>
+    <a href="#a">A · Workbench</a>
+    <a href="#b">B · Canvas</a>
+    <a href="#c">C · Review feed</a>
+    <a href="#d">D · Time machine</a>
+    <a href="#e">E · Canonical JSON</a>
+    <a href="#compare">Comparison</a>
+    <a href="#recommendation">Recommendation</a>
+    <span class="spacer"></span>
+    <button class="btn" id="themeBtn" type="button">Toggle theme</button>
+  </div>
+</nav>
+
+<main>
+  <header>
+    <h1>UI design proposals</h1>
+    <div class="meta">Matillion Diff · draft · 2026-10-05 · Companion document: <a href="architecture.html">Architecture draft</a></div>
+    <p class="lede">
+      Five layout concepts for a read-only, visual diff viewer for Matillion ETL repositories. The first release targets <strong>Matillion ETL for Azure Synapse</strong>, and the designs leave room for other Matillion ETL variants. All of them use the same example: the branch
+      <code>feature/eu-orders</code> compared against <code>main</code>. In that branch the orchestration job <em>daily_load</em> lost a truncate step,
+      had its load component renamed and its SQL changed, and gained a step that logs load failures. The mockups are interactive, so try clicking on them.
+    </p>
+  </header>
+
+  <!-- ===================== PRINCIPLES ===================== -->
+  <section id="principles">
+    <h2>Design principles</h2>
+    <div class="principles">
+      <div class="principle"><b>Speak Matillion, not JSON</b><span>Show component names, types and parameter labels. Slot numbers and internal IDs appear only in the Raw view.</span></div>
+      <div class="principle"><b>Signal over noise</b><span>Layout-only changes are hidden by default and one toggle away. Badge counts show semantic changes only.</span></div>
+      <div class="principle"><b>One selection, many lenses</b><span>Selecting a component in any view selects it in every view. Switching views never loses your place.</span></div>
+      <div class="principle"><b>Visibly read-only</b><span>A permanent "read-only" marker, and no buttons that suggest editing. No save, apply, revert or merge.</span></div>
+      <div class="principle"><b>Never colour alone</b><span>Every change kind has a glyph and a label as well as a colour, and removed items also get a dashed outline. This keeps the UI usable for red-green colour blindness.</span></div>
+      <div class="principle"><b>Keyboard first</b><span>Reviewers move through changes with <kbd>j</kbd>/<kbd>k</kbd> and through objects with <kbd>[</kbd>/<kbd>]</kbd>, without touching the mouse.</span></div>
+    </div>
+  </section>
+
+  <!-- ===================== DESIGN LANGUAGE ===================== -->
+  <section id="language">
+    <h2>Shared design language</h2>
+    <h3>Change kinds</h3>
+    <div class="tokens">
+      <div class="token"><div class="sw"><span class="gl k-add">+</span>Added</div><small>Only in compare. Solid, thick outline.</small></div>
+      <div class="token"><div class="sw"><span class="gl k-del">−</span>Removed</div><small>Only in base. Dashed outline, shown as a ghost on the canvas.</small></div>
+      <div class="token"><div class="sw"><span class="gl k-mod">~</span>Modified</div><small>Parameter, SQL, grid or variable content changed.</small></div>
+      <div class="token"><div class="sw"><span class="gl k-ren">→</span>Renamed</div><small>Same component (matched by ID), new name.</small></div>
+      <div class="token"><div class="sw"><span class="gl k-mod">⇄</span>Rewired</div><small>Incoming or outgoing connectors changed.</small></div>
+      <div class="token"><div class="sw"><span class="gl k-lay">↔</span>Layout</div><small>Only position or size changed. Hidden by default.</small></div>
+    </div>
+    <h3>Connectors</h3>
+    <p>
+      Matillion's own canvas colours connectors green for success and red for failure, which clashes with the diff colours.
+      In Matillion Diff, <strong>colour always means change status</strong>. The connector kind is shown by a small glyph at the middle of the edge instead:
+      <code>✓</code> success, <code>✗</code> failure, <code>→</code> unconditional, <code>T</code>/<code>F</code> true/false, <code>⟳</code> iteration.
+    </p>
+    <h3>Matillion ETL variant</h3>
+    <p>
+      Each opened repository has a Matillion ETL variant, picked when the repository is opened. In the first release the only variant is Synapse.
+      The variant is shown as a chip next to the repository name in every view (<span class="variant">Synapse</span>).
+      It controls which component types are known, how SQL is highlighted (T-SQL for Synapse), and the list in the component-type filter.
+    </p>
+    <div class="tokens">
+      <div class="token"><div class="sw"><span class="variant">Synapse</span></div><small>Variant chip. Read-only here; changed in the repository settings.</small></div>
+      <div class="token"><div class="sw"><span class="warn-na">⚠ not on Synapse</span></div><small>The component type exists in Matillion ETL but not in the selected variant. This usually means the job was copied from another variant. Diffing is unaffected.</small></div>
+      <div class="token"><div class="sw"><span class="gl k-lay">?</span>Unknown type</div><small>The <code>implementationID</code> is in no map. Shown as "Component #id" and diffed normally.</small></div>
+    </div>
+    <h3>Component categories</h3>
+    <p>
+      Components carry a thin left strip in their category colour, so they are recognisable without one icon per component type.
+      The categories group the 65 types in <code>implementation_id_to_type.json</code>, following the order of Matillion's component palette.
+      That map is shared by all variants. Types that the selected variant does not offer are left out of the component-type filter.
+      Category colour is secondary: change status is always shown by the outline, the glyph and the label, never by the strip.
+    </p>
+    <div class="tokens">
+      <div class="token"><div class="sw"><span class="gl" style="background:var(--cat-flow)"></span>Flow</div><small>Start, End Success, End Failure, If, And, Or, Retry, Run Orchestration, Run Transformation</small></div>
+      <div class="token"><div class="sw"><span class="gl" style="background:var(--cat-iter)"></span>Iterate</div><small>File, Fixed, Grid and Loop Iterator</small></div>
+      <div class="token"><div class="sw"><span class="gl" style="background:var(--cat-read)"></span>Read</div><small>Database Query, API Query, Data Transfer, Table Input, Multi Table Input, Fixed Flow, …</small></div>
+      <div class="token"><div class="sw"><span class="gl" style="background:var(--cat-xform)"></span>Transform</div><small>Join, Unite, Aggregate, Calculator, Filter, Rank, SQL, … (22 types)</small></div>
+      <div class="token"><div class="sw"><span class="gl" style="background:var(--cat-write)"></span>Write &amp; DDL</div><small>Table Output, Table Update, Rewrite Table, Create View, Create Table, Truncate Tables, …</small></div>
+      <div class="token"><div class="sw"><span class="gl" style="background:var(--cat-script)"></span>Script</div><small>SQL Script, Python Script, Bash Script</small></div>
+      <div class="token"><div class="sw"><span class="gl" style="background:var(--cat-var)"></span>Variables &amp; checks</div><small>Query Result To Scalar/Grid, Append To Grid, Table Metadata To Grid, Assert Table, Assert View, …</small></div>
+    </div>
+  </section>
+
+  <!-- ===================== A: WORKBENCH ===================== -->
+  <section id="a">
+    <h2><span class="num">A</span>Workbench</h2>
+    <p class="tagline">An IDE-style, three-pane layout: changed objects on the left, a structured diff in the middle, an inspector on the right.</p>
+    <p>
+      This layout is familiar to anyone who has used VS Code or a Git client. The middle pane shows a <em>component → parameter</em> table with base
+      and compare columns. The inspector shows detail for the selected row, such as a SQL diff or grid table. The middle pane's tabs switch between
+      lenses (Summary, Structure, Canvas, JSON, Raw) over the same diff.
+    </p>
+    <div class="mock-scroll"><div class="win" id="mockA">
+      <div class="win-title"><span class="wdots"><i></i><i></i><i></i></span><span class="wt">Matillion Diff</span></div>
+      <div class="appbar">
+        <span class="repo">acme-dwh-matillion <span class="ro">READ-ONLY</span></span><span class="variant" title="Matillion ETL variant">Synapse</span>
+        <span class="rev"><b>Base</b>main · 4f2a91c</span><span class="swap">⇄</span>
+        <span class="rev"><b>Compare</b>feature/eu-orders · b71e0d3</span>
+        <span class="grow"></span>
+        <label class="tgl"><input type="checkbox" id="aHideLayout" checked> Hide layout-only</label>
+      </div>
+      <div class="wb">
+        <div class="left" id="aTree">
+          <div class="sect-h">Changed objects · 5</div>
+          <div class="sect-h" style="text-transform:none;letter-spacing:0;font-weight:500">▾ Orchestration</div>
+          <div class="obj sel" data-obj="daily_load"><span class="badge k-mod">~</span><span class="nm">daily_load</span><span class="cnt"><span class="a">+1</span><span class="m">~2</span><span class="d">−1</span></span></div>
+          <div class="obj" data-obj="init_env"><span class="badge k-add">+</span><span class="nm">init_env</span><span class="cnt"><span class="a">new</span></span></div>
+          <div class="obj layout-only" data-obj="weekly_rollup"><span class="badge k-lay">↔</span><span class="nm">weekly_rollup</span><span class="cnt mutedtxt">layout</span></div>
+          <div class="sect-h" style="text-transform:none;letter-spacing:0;font-weight:500">▾ Transformation</div>
+          <div class="obj" data-obj="t_orders_enrich"><span class="badge k-mod">~</span><span class="nm">t_orders_enrich</span><span class="cnt"><span class="m">~2</span></span></div>
+          <div class="obj" data-obj="t_legacy_customers"><span class="badge k-del">−</span><span class="nm">t_legacy_customers</span><span class="cnt"><span class="d">deleted</span></span></div>
+          <div class="sect-h" style="margin-top:12px">Other files · 1</div>
+          <div class="obj" data-obj="README.md"><span class="badge k-mod">~</span><span class="nm folder">README.md</span></div>
+        </div>
+        <div class="center">
+          <div class="tabs"><span>Summary</span><span class="on">Structure</span><span>Canvas</span><span>JSON</span><span>Raw</span></div>
+          <div id="aCenter">
+            <div class="center-h"><h5>daily_load</h5><span class="mutedtxt">Orchestration · /ORCHESTRATION/daily/daily_load.json</span></div>
+            <table class="st">
+              <tr><th style="width:34%">Element</th><th style="width:33%">Base · main</th><th>Compare · feature/eu-orders</th></tr>
+              <tr class="grp" data-g="g1"><td colspan="3"><span class="badge k-del">−</span> Truncate Staging <span class="mutedtxt" style="font-weight:400">SQL Script</span></td></tr>
+              <tr class="prow" data-p="g1" data-i="ts-sql"><td>SQL Script</td><td><span class="old">TRUNCATE TABLE stg.orders;</span></td><td class="mutedtxt">—</td></tr>
+              <tr class="grp" data-g="g2"><td colspan="3"><span class="badge k-mod">~</span> <span class="old">Load Orders</span> → Load Orders (EU) <span class="mutedtxt" style="font-weight:400">Database Query</span> <span class="pill k-ren">renamed</span></td></tr>
+              <tr class="prow" data-p="g2" data-i="lo-name"><td>Name</td><td><span class="old">Load Orders</span></td><td><span class="new">Load Orders (EU)</span></td></tr>
+              <tr class="prow sel" data-p="g2" data-i="lo-sql"><td>SQL Query</td><td class="mutedtxt">SELECT * FROM orders …</td><td><span class="pill k-mod">+1 line</span></td></tr>
+              <tr class="prow is-layout hidden" data-p="g2" data-i="lo-pos"><td>Position</td><td class="mutedtxt">320, 90</td><td class="mutedtxt">345, 112 <span class="pill k-lay">layout</span></td></tr>
+              <tr class="grp" data-g="g3"><td colspan="3"><span class="badge k-add">+</span> Log Failure <span class="mutedtxt" style="font-weight:400">SQL Script</span></td></tr>
+              <tr class="prow" data-p="g3" data-i="lf-sql"><td>SQL Script</td><td class="mutedtxt">—</td><td><span class="new">INSERT INTO audit.job_failures …</span></td></tr>
+              <tr class="grp unch collapsed" data-g="g4"><td colspan="3">3 unchanged components</td></tr>
+              <tr class="prow hidden" data-p="g4"><td>Start · Run t_orders_enrich · End Success</td><td></td><td></td></tr>
+              <tr class="grp" data-g="g5"><td colspan="3"><span class="badge k-mod">⇄</span> Connectors <span class="mutedtxt" style="font-weight:400">+2 −2</span></td></tr>
+              <tr class="prow" data-p="g5" data-i="conn"><td><span class="badge k-del">−</span> ✓ Start → Truncate Staging</td><td>present</td><td class="mutedtxt">—</td></tr>
+              <tr class="prow" data-p="g5" data-i="conn"><td><span class="badge k-del">−</span> ✓ Truncate Staging → Load Orders</td><td>present</td><td class="mutedtxt">—</td></tr>
+              <tr class="prow" data-p="g5" data-i="conn"><td><span class="badge k-add">+</span> ✓ Start → Load Orders (EU)</td><td class="mutedtxt">—</td><td>present</td></tr>
+              <tr class="prow" data-p="g5" data-i="conn"><td><span class="badge k-add">+</span> ✗ Load Orders (EU) → Log Failure</td><td class="mutedtxt">—</td><td>present</td></tr>
+              <tr class="grp" data-g="g6"><td colspan="3"><span class="badge k-add">+</span> Job variables</td></tr>
+              <tr class="prow" data-p="g6" data-i="var"><td>region <span class="mutedtxt">(Text)</span></td><td class="mutedtxt">—</td><td><span class="new">'EU'</span></td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="right" id="aInsp"></div>
+      </div>
+    </div></div>
+    <div class="pros-cons">
+      <div class="pc good"><h4>Strengths</h4><ul><li>Scales to dozens of changed objects</li><li>Exact, side-by-side values</li><li>Hosts every other view as a tab</li></ul></div>
+      <div class="pc bad"><h4>Weaknesses</h4><ul><li>Dense, and needs a wide screen</li><li>Graph changes (rewiring) are hard to picture as rows</li></ul></div>
+      <div class="pc"><h4>Best for</h4><ul><li>Developers doing daily reviews</li><li>Large branch comparisons</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== B: CANVAS ===================== -->
+  <section id="b">
+    <h2><span class="num">B</span>Canvas diff</h2>
+    <p class="tagline">The job is drawn as Matillion users already picture it, with change status layered on the canvas.</p>
+    <p>
+      The canvas is the main view. Four modes: <strong>Side by side</strong> (base and compare in synchronised viewports),
+      <strong>Overlay</strong> (one canvas, with removed components as ghosts and moved components showing their old outline), and
+      <strong>Before</strong> or <strong>After</strong> on their own. Clicking a component opens a drawer with its parameter changes.
+    </p>
+    <div class="mock-scroll"><div class="win">
+      <div class="win-title"><span class="wdots"><i></i><i></i><i></i></span><span class="wt">Matillion Diff · daily_load</span></div>
+      <div class="appbar">
+        <span class="repo">daily_load <span class="ro">READ-ONLY</span></span><span class="variant" title="Matillion ETL variant">Synapse</span>
+        <span class="rev"><b>Base</b>main · 4f2a91c</span><span class="swap">⇄</span>
+        <span class="rev"><b>Compare</b>feature/eu-orders · b71e0d3</span>
+        <span class="grow"></span>
+        <span class="mutedtxt">Zoom 100% · <kbd>F</kbd> fit</span>
+      </div>
+      <div class="cv-wrap">
+        <div class="cv-tools">
+          <div class="seg" id="bMode">
+            <button type="button" data-m="side">Side by side</button>
+            <button type="button" data-m="overlay" class="on">Overlay</button>
+            <button type="button" data-m="before">Before</button>
+            <button type="button" data-m="after">After</button>
+          </div>
+          <label class="tgl"><input type="checkbox" id="bShowMoves"> Show moves</label>
+          <span class="grow" style="flex:1"></span>
+          <div class="legend">
+            <span><i style="border-color:var(--add);background:var(--add-bg)"></i>added</span>
+            <span><i style="border-color:var(--del);border-style:dashed;background:var(--del-bg)"></i>removed</span>
+            <span><i style="border-color:var(--mod);background:var(--mod-bg)"></i>modified</span>
+            <span>✓ success · ✗ failure</span>
+          </div>
+        </div>
+        <div class="cv-stage" id="bStage"></div>
+        <div class="cv-drawer" id="bDrawer"></div>
+        <div class="cv-minimap" aria-hidden="true">
+          <i style="left:8px;top:22px;width:14px;background:var(--cat-flow)"></i>
+          <i style="left:28px;top:14px;width:14px;background:var(--del)"></i>
+          <i style="left:46px;top:22px;width:14px;background:var(--mod)"></i>
+          <i style="left:66px;top:22px;width:14px;background:var(--cat-flow)"></i>
+          <i style="left:86px;top:22px;width:14px;background:var(--cat-flow)"></i>
+          <i style="left:46px;top:36px;width:14px;background:var(--add)"></i>
+        </div>
+      </div>
+    </div></div>
+    <div class="pros-cons">
+      <div class="pc good"><h4>Strengths</h4><ul><li>Instantly readable for Matillion users</li><li>Rewiring and flow changes are obvious</li><li>Good for walking non-developers through a change</li></ul></div>
+      <div class="pc bad"><h4>Weaknesses</h4><ul><li>Parameter detail needs the drawer</li><li>Highest build effort (layout, hit-testing, zoom)</li><li>Transformation jobs with more than 100 components get crowded</li></ul></div>
+      <div class="pc"><h4>Best for</h4><ul><li>Understanding <em>what the job does differently</em></li><li>Demos and change-approval meetings</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== C: REVIEW FEED ===================== -->
+  <section id="c">
+    <h2><span class="num">C</span>Review feed</h2>
+    <p class="tagline">A pull-request-style, single-column list of readable change sentences, grouped by object.</p>
+    <p>
+      Each semantic change becomes one card: "Renamed <em>Load Orders</em> to <em>Load Orders (EU)</em>". Expanding a card shows the evidence
+      (a SQL diff, a grid table, the connectors involved). Objects can be ticked as reviewed. That progress is kept for the session only
+      and is never written to the repository. This layout also works well on narrow windows and in a browser.
+    </p>
+    <div class="mock-scroll"><div class="win" style="min-width:640px">
+      <div class="win-title"><span class="wdots"><i></i><i></i><i></i></span><span class="wt">Matillion Diff · Review</span></div>
+      <div class="appbar">
+        <span class="repo">acme-dwh-matillion <span class="ro">READ-ONLY</span></span><span class="variant" title="Matillion ETL variant">Synapse</span>
+        <span class="rev"><b>Base</b>main</span><span class="swap">⇄</span><span class="rev"><b>Compare</b>feature/eu-orders</span>
+      </div>
+      <div class="feed" id="feed">
+        <div class="feed-top">
+          <div class="chips" id="cChips">
+            <button type="button" class="chipf on" data-f="all">All</button>
+            <button type="button" class="chipf" data-f="structure">Structure</button>
+            <button type="button" class="chipf" data-f="config">Configuration</button>
+            <button type="button" class="chipf" data-f="layout">Layout</button>
+          </div>
+          <div class="progress"><span id="cProgTxt">0 of 5 objects reviewed</span><span class="bar"><i id="cBar"></i></span></div>
+        </div>
+        <div class="feed-body">
+          <div class="fobj">
+            <div class="fobj-h"><span class="badge k-mod">~</span><span class="title">daily_load</span><span class="path">ORCHESTRATION/daily</span><span class="grow"></span><label class="tgl"><input type="checkbox" class="rv"> Reviewed</label></div>
+            <div class="cards">
+              <details class="card" data-c="structure"><summary><span class="badge k-del">−</span><span class="s">Removed component <b>Truncate Staging</b> <span class="mutedtxt">(SQL Script)</span></span><span class="chev">›</span></summary>
+                <div class="body"><div class="codediff"><div class="d">- TRUNCATE TABLE stg.orders;</div></div><div class="why">Its 2 connectors were removed too. Start now flows directly into Load Orders (EU).</div></div></details>
+              <details class="card" data-c="config"><summary><span class="badge k-ren">→</span><span class="s">Renamed <span class="old">Load Orders</span> to <b>Load Orders (EU)</b> <span class="mutedtxt">(Database Query)</span></span><span class="chev">›</span></summary>
+                <div class="body"><div class="why">Matched by component ID 1290412.</div></div></details>
+              <details class="card" data-c="config" open><summary><span class="badge k-mod">~</span><span class="s">Changed <b>SQL Query</b> of Load Orders (EU): 1 line added</span><span class="chev">›</span></summary>
+                <div class="body"><div class="codediff"><div class="h">@@ SQL Query @@</div><div>  SELECT *</div><div>  FROM orders</div><div class="a">+ WHERE region = 'EU'</div></div></div></details>
+              <details class="card" data-c="structure"><summary><span class="badge k-add">+</span><span class="s">Added component <b>Log Failure</b> <span class="mutedtxt">(SQL Script)</span>, triggered <b>on failure</b> of Load Orders (EU)</span><span class="chev">›</span></summary>
+                <div class="body"><div class="codediff"><div class="a">+ INSERT INTO audit.job_failures (job_name, failed_at)</div><div class="a">+ VALUES ('daily_load', CURRENT_TIMESTAMP);</div></div></div></details>
+              <details class="card" data-c="config"><summary><span class="badge k-add">+</span><span class="s">Added job variable <b>region</b> <span class="mutedtxt">(Text, default 'EU')</span></span><span class="chev">›</span></summary>
+                <div class="body"><div class="why">Not yet referenced by any component parameter in this job.</div></div></details>
+              <details class="card hidden" data-c="layout"><summary><span class="badge k-lay">↔</span><span class="s">Moved Load Orders (EU) on the canvas</span><span class="chev">›</span></summary>
+                <div class="body"><div class="why">320, 90 → 345, 112</div></div></details>
+            </div>
+          </div>
+          <div class="fobj">
+            <div class="fobj-h"><span class="badge k-mod">~</span><span class="title">t_orders_enrich</span><span class="path">TRANSFORMATION/orders</span><span class="grow"></span><label class="tgl"><input type="checkbox" class="rv"> Reviewed</label></div>
+            <div class="cards">
+              <details class="card" data-c="config"><summary><span class="badge k-mod">~</span><span class="s">Changed <b>Join Expression</b> of <b>Join Orders/Customers</b> <span class="mutedtxt">(Join)</span></span><span class="chev">›</span></summary>
+                <div class="body"><div class="codediff"><div class="d">- "o"."customer_id" = "c"."id"</div><div class="a">+ "o"."customer_id" = "c"."id" AND "o"."region" = "c"."region"</div></div></div></details>
+              <details class="card" data-c="config"><summary><span class="badge k-mod">~</span><span class="s">Changed calculated column <b>net_amount</b> in <b>Calc Net</b> <span class="mutedtxt">(Calculator · grid row 3)</span></span><span class="chev">›</span></summary>
+                <div class="body"><div class="codediff"><div class="d">- "amount" - "discount"</div><div class="a">+ "amount" - "discount" - "tax"</div></div></div></details>
+            </div>
+          </div>
+          <div class="fobj">
+            <div class="fobj-h"><span class="badge k-add">+</span><span class="title">init_env</span><span class="path">ORCHESTRATION/setup</span><span class="grow"></span><label class="tgl"><input type="checkbox" class="rv"> Reviewed</label></div>
+            <div class="cards"><details class="card" data-c="structure"><summary><span class="badge k-add">+</span><span class="s">New job with 3 components: Start → <b>Set region</b> (Python Script) → End Success</span><span class="chev">›</span></summary>
+              <div class="body"><div class="codediff"><div class="a">+ context.updateVariable('region', 'EU')</div></div></div></details></div>
+          </div>
+          <div class="fobj">
+            <div class="fobj-h"><span class="badge k-del">−</span><span class="title">t_legacy_customers</span><span class="path">TRANSFORMATION/legacy</span><span class="grow"></span><label class="tgl"><input type="checkbox" class="rv"> Reviewed</label></div>
+            <div class="cards"><details class="card" data-c="structure"><summary><span class="badge k-del">−</span><span class="s">Job deleted (12 components). <span class="mutedtxt">Still referenced by 0 jobs on this branch.</span></span><span class="chev">›</span></summary>
+              <div class="body"><div class="why">Reference check: no Run Transformation component in the compare revision points to this job.</div></div></details></div>
+          </div>
+          <div class="fobj">
+            <div class="fobj-h"><span class="badge k-lay">↔</span><span class="title">weekly_rollup</span><span class="path">ORCHESTRATION/weekly</span><span class="grow"></span><label class="tgl"><input type="checkbox" class="rv"> Reviewed</label></div>
+            <div class="cards"><details class="card" data-c="layout"><summary><span class="badge k-lay">↔</span><span class="s">Layout only: 4 components moved, no semantic changes</span><span class="chev">›</span></summary>
+              <div class="body"><div class="why">Usually a "tidy canvas" commit. Safe to skip.</div></div></details></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="pros-cons">
+      <div class="pc good"><h4>Strengths</h4><ul><li>Lowest learning curve: reads like release notes</li><li>Works at any width, including web and tablet</li><li>Reviewed state gives a clear sense of progress</li></ul></div>
+      <div class="pc bad"><h4>Weaknesses</h4><ul><li>Loses the spatial picture of the job</li><li>Sentence generation needs care for every change type</li></ul></div>
+      <div class="pc"><h4>Best for</h4><ul><li>Reviewing a pull request or release</li><li>Leads and non-developers</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== D: TIME MACHINE ===================== -->
+  <section id="d">
+    <h2><span class="num">D</span>Time machine</h2>
+    <p class="tagline">The history of one job as a change matrix: components down the side, commits across the top.</p>
+    <p>
+      The question here is not "what differs between A and B" but "how did this job evolve, and when did <em>this component</em> change?".
+      Click a commit to see it against its parent, or Shift-click a second commit to select a range. The range then drives the other views.
+    </p>
+    <div class="mock-scroll"><div class="win">
+      <div class="win-title"><span class="wdots"><i></i><i></i><i></i></span><span class="wt">Matillion Diff · History</span></div>
+      <div class="appbar">
+        <span class="repo">daily_load <span class="ro">READ-ONLY</span></span><span class="variant" title="Matillion ETL variant">Synapse</span>
+        <span class="mutedtxt">History on</span><span class="rev">feature/eu-orders</span>
+        <span class="grow"></span>
+        <label class="tgl"><input type="checkbox" id="dHideLayout"> Hide layout-only</label>
+      </div>
+      <div class="hist">
+        <div class="hist-h"><h5>8 commits touched this job</h5><span class="mutedtxt">Click a commit · Shift-click for a range</span></div>
+        <table class="mx" id="dMatrix"></table>
+        <div class="hist-foot" id="dFoot"></div>
+      </div>
+    </div></div>
+    <div class="pros-cons">
+      <div class="pc good"><h4>Strengths</h4><ul><li>Unique "blame for components" insight</li><li>Shows hot spots and churn</li><li>Makes range selection visual instead of typing SHAs</li></ul></div>
+      <div class="pc bad"><h4>Weaknesses</h4><ul><li>Has to diff every commit pair, which is costly the first time</li><li>Only one object at a time</li></ul></div>
+      <div class="pc"><h4>Best for</h4><ul><li>Investigating a regression</li><li>Auditing who changed what, and when</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== E: CANONICAL JSON ===================== -->
+  <section id="e">
+    <h2><span class="num">E</span>Canonical JSON diff</h2>
+    <p class="tagline">A familiar line-by-line code diff, run on a cleaned-up rewrite of the job JSON instead of the raw export.</p>
+    <p>
+      The job stays JSON, but it is rewritten into a canonical form. Slot maps become named keys. Components and connectors are referenced by name instead
+      of ID. Layout and derived ID arrays are dropped. SQL becomes an array of lines. Components are ordered by component ID, so a rename doesn't move a block.
+      A standard split or unified diff of that JSON is surprisingly readable. This is the cheapest proposal to build, and the same printer can later
+      be a <code>git textconv</code> driver.
+    </p>
+    <div class="mock-scroll"><div class="win">
+      <div class="win-title"><span class="wdots"><i></i><i></i><i></i></span><span class="wt">Matillion Diff · daily_load · JSON</span></div>
+      <div class="appbar">
+        <span class="repo">daily_load <span class="ro">READ-ONLY</span></span><span class="variant" title="Matillion ETL variant">Synapse</span>
+        <span class="rev"><b>Base</b>main · 4f2a91c</span><span class="swap">⇄</span><span class="rev"><b>Compare</b>feature/eu-orders · b71e0d3</span>
+        <span class="grow"></span>
+        <div class="seg" id="eMode"><button type="button" data-m="split" class="on">Split</button><button type="button" data-m="unified">Unified</button></div>
+      </div>
+      <div class="tx" id="eText"></div>
+    </div></div>
+    <p class="mutedtxt" style="font-size:14px">Lines that differ only by a trailing comma (for example after an element is appended) are treated as unchanged.</p>
+    <div class="pros-cons">
+      <div class="pc good"><h4>Strengths</h4><ul><li>Smallest build effort, and a good MVP fallback</li><li>Familiar to developers</li><li>Reusable outside the app via textconv</li></ul></div>
+      <div class="pc bad"><h4>Weaknesses</h4><ul><li>Still a line diff: rewiring and renames are only implied</li><li>Needs comma-insensitive line matching</li><li>Can't hide layout-only changes per item</li></ul></div>
+      <div class="pc"><h4>Best for</h4><ul><li>Developers who live in diffs</li><li>Copying and pasting into tickets</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== COMPARISON ===================== -->
+  <section id="compare">
+    <h2>Comparison</h2>
+    <div class="table-wrap"><table class="plain">
+      <tr><th>Criterion</th><th>A · Workbench</th><th>B · Canvas</th><th>C · Review feed</th><th>D · Time machine</th><th>E · JSON</th></tr>
+      <tr><td>Learning curve (more dots = easier)</td><td class="dots">●●●<span class="off">●●</span></td><td class="dots">●●●●<span class="off">●</span></td><td class="dots">●●●●●</td><td class="dots">●●<span class="off">●●●</span></td><td class="dots">●●●●<span class="off">●</span></td></tr>
+      <tr><td>Shows structural or flow changes</td><td class="dots">●●●<span class="off">●●</span></td><td class="dots">●●●●●</td><td class="dots">●●●<span class="off">●●</span></td><td class="dots">●●●<span class="off">●●</span></td><td class="dots">●●<span class="off">●●●</span></td></tr>
+      <tr><td>Shows parameter detail</td><td class="dots">●●●●●</td><td class="dots">●●●<span class="off">●●</span></td><td class="dots">●●●●<span class="off">●</span></td><td class="dots">●●<span class="off">●●●</span></td><td class="dots">●●●●<span class="off">●</span></td></tr>
+      <tr><td>Many changed objects</td><td class="dots">●●●●●</td><td class="dots">●<span class="off">●●●●</span></td><td class="dots">●●●●<span class="off">●</span></td><td class="dots">●<span class="off">●●●●</span></td><td class="dots">●●●<span class="off">●●</span></td></tr>
+      <tr><td>Narrow screens and web</td><td class="dots">●●<span class="off">●●●</span></td><td class="dots">●●<span class="off">●●●</span></td><td class="dots">●●●●●</td><td class="dots">●●●<span class="off">●●</span></td><td class="dots">●●●<span class="off">●●</span></td></tr>
+      <tr><td>Build effort (more dots = cheaper)</td><td class="dots">●●●<span class="off">●●</span></td><td class="dots">●<span class="off">●●●●</span></td><td class="dots">●●●<span class="off">●●</span></td><td class="dots">●●<span class="off">●●●</span></td><td class="dots">●●●●●</td></tr>
+    </table></div>
+    <p>The proposals don't compete. They are lenses on the same <code>JobDiff</code>, which the architecture computes once and shares.</p>
+  </section>
+
+  <!-- ===================== RECOMMENDATION ===================== -->
+  <section id="recommendation">
+    <h2>Recommendation: combine them</h2>
+    <p>
+      Use <strong>A (Workbench)</strong> as the application shell, and show the other proposals as tabs over the selected object.
+      Make <strong>C (Review feed)</strong> the default tab, because most people first want to know what changed in plain words.
+      <strong>D (Time machine)</strong> opens from any object's context menu.
+    </p>
+    <div class="compose">
+      <div class="cbox"><b>Left pane</b><small>Changed-objects tree (A), with semantic badge counts and the layout-only filter</small></div>
+      <div class="cbox"><b>Center: one object, several lenses</b><small>The selection is shared across tabs, and an inspector pane can be shown on the right</small>
+        <div class="ctabs">
+          <div class="ctab default"><b>Summary</b><small>C · default · MVP</small></div>
+          <div class="ctab"><b>Structure</b><small>A · MVP</small></div>
+          <div class="ctab"><b>JSON</b><small>E · MVP</small></div>
+          <div class="ctab"><b>Canvas</b><small>B · v1</small></div>
+        </div>
+      </div>
+      <div class="cbox"><b>History mode</b><small>D · v1 · opened from an object</small></div>
+      <div class="cbox"><b>Narrow and web layout</b><small>The left pane collapses to a drawer, and Summary (C) becomes the whole screen. Canvas falls back to the After mode with a list of changes below it.</small></div>
+    </div>
+    <h3>Keyboard map</h3>
+    <div class="table-wrap"><table class="plain">
+      <tr><th>Keys</th><th>Action</th></tr>
+      <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>Next or previous change within the object</td></tr>
+      <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Previous or next changed object</td></tr>
+      <tr><td><kbd>1</kbd>–<kbd>4</kbd></td><td>Switch tab: Summary, Structure, JSON, Canvas</td></tr>
+      <tr><td><kbd>L</kbd></td><td>Toggle layout-only changes</td></tr>
+      <tr><td><kbd>S</kbd></td><td>Swap base and compare</td></tr>
+      <tr><td><kbd>H</kbd></td><td>Open the history of the current object</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Jump to an object or component by name</td></tr>
+    </table></div>
+    <h3>Open UI questions</h3>
+    <ul>
+      <li>Where is the variant picked? This proposal puts it in the open-repository dialog, preselected to Synapse, and makes it changeable in the repository settings.</li>
+      <li>Should the canvas use real Matillion component icons? There are licensing and maintenance concerns, so category strips are proposed instead.</li>
+      <li>Should "Reviewed" marks be kept between sessions in app-local storage, keyed by object path and compare SHA? They would still never go into the repository.</li>
+      <li>Should the canvas follow Matillion's coordinates exactly, or tidy them automatically? This proposal keeps the original coordinates so the canvas matches what users see in Matillion.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  /* ---------- theme ---------- */
+  try { var t = localStorage.getItem('mdiff-theme'); if (t) root.setAttribute('data-theme', t); } catch (e) {}
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    var dark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('mdiff-theme', next); } catch (e) {}
+  });
+
+  /* ---------- nav scroll-spy ---------- */
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var spy = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      navLinks.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id); });
+    });
+  }, { rootMargin: '-15% 0px -70% 0px' });
+  document.querySelectorAll('main section[id]').forEach(function (s) { spy.observe(s); });
+
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  /* =========================================================
+     A · Workbench
+     ========================================================= */
+  var inspA = {
+    'lo-sql': '<div class="insp-h">SQL Query</div><div class="insp-sub">Load Orders (EU) · Database Query</div>' +
+      '<div class="codediff"><div class="h">@@ -1,2 +1,3 @@</div><div>  SELECT *</div><div>  FROM orders</div><div class="a">+ WHERE region = \'EU\'</div></div>' +
+      '<div class="meta-list"><div><span>Kind</span><span>Text · SQL</span></div><div><span>Matched by</span><span>component ID</span></div><div><span>Component ID</span><span>1290412</span></div><div><span>implementationID</span><span>-741198691</span></div></div>',
+    'lo-name': '<div class="insp-h">Name</div><div class="insp-sub">Database Query · matched by component ID</div>' +
+      '<div class="kv"><span>Base</span><span class="old">Load Orders</span></div><div class="kv"><span>Compare</span><span class="new">Load Orders (EU)</span></div>' +
+      '<div class="meta-list"><div><span>Referenced by</span><span>2 connectors</span></div></div>',
+    'lo-pos': '<div class="insp-h">Position</div><div class="insp-sub">Layout-only change</div>' +
+      '<div class="kv"><span>Base</span><span>x 320 · y 90 · 120×44</span></div><div class="kv"><span>Compare</span><span>x 345 · y 112 · 120×44</span></div>',
+    'ts-sql': '<div class="insp-h">SQL Script</div><div class="insp-sub">Truncate Staging · removed component</div>' +
+      '<div class="codediff"><div class="d">- TRUNCATE TABLE stg.orders;</div></div>' +
+      '<div class="meta-list"><div><span>Connectors removed</span><span>2</span></div></div>',
+    'lf-sql': '<div class="insp-h">SQL Script</div><div class="insp-sub">Log Failure · added component</div>' +
+      '<div class="codediff"><div class="a">+ INSERT INTO audit.job_failures (job_name, failed_at)</div><div class="a">+ VALUES (\'daily_load\', CURRENT_TIMESTAMP);</div></div>' +
+      '<div class="meta-list"><div><span>implementationID</span><span>-798585337</span></div></div>',
+    'conn': '<div class="insp-h">Connectors</div><div class="insp-sub">Flow around Load Orders (EU)</div>' +
+      '<div class="codediff"><div class="d">- Start ─✓→ Truncate Staging</div><div class="d">- Truncate Staging ─✓→ Load Orders</div>' +
+      '<div class="a">+ Start ─✓→ Load Orders (EU)</div><div class="a">+ Load Orders (EU) ─✗→ Log Failure</div><div>  Load Orders (EU) ─✓→ Run t_orders_enrich</div></div>',
+    'var': '<div class="insp-h">Job variable · region</div><div class="insp-sub">Added</div>' +
+      '<div class="kv"><span>Type</span><span>Text</span></div><div class="kv"><span>Default</span><span class="new">EU</span></div><div class="kv"><span>Behaviour</span><span>Copied</span></div>'
+  };
+  var aCenter = document.getElementById('aCenter');
+  var aCenterHTML = aCenter.innerHTML;
+  var aInsp = document.getElementById('aInsp');
+  aInsp.innerHTML = inspA['lo-sql'];
+
+  function wireA() {
+    aCenter.querySelectorAll('tr.grp').forEach(function (g) {
+      g.addEventListener('click', function () {
+        var id = g.getAttribute('data-g');
+        var collapsed = g.classList.toggle('collapsed');
+        aCenter.querySelectorAll('tr.prow[data-p="' + id + '"]').forEach(function (r) {
+          var layoutHidden = r.classList.contains('is-layout') && document.getElementById('aHideLayout').checked;
+          r.classList.toggle('hidden', collapsed || layoutHidden);
+        });
+      });
+    });
+    aCenter.querySelectorAll('tr.prow[data-i]').forEach(function (r) {
+      r.addEventListener('click', function () {
+        aCenter.querySelectorAll('tr.prow.sel').forEach(function (x) { x.classList.remove('sel'); });
+        r.classList.add('sel');
+        aInsp.innerHTML = inspA[r.getAttribute('data-i')] || '';
+      });
+    });
+  }
+  wireA();
+
+  function applyLayoutA() {
+    var hide = document.getElementById('aHideLayout').checked;
+    aCenter.querySelectorAll('tr.is-layout').forEach(function (r) {
+      var g = aCenter.querySelector('tr.grp[data-g="' + r.getAttribute('data-p') + '"]');
+      r.classList.toggle('hidden', hide || (g && g.classList.contains('collapsed')));
+    });
+    document.querySelectorAll('#aTree .layout-only').forEach(function (o) { o.style.display = hide ? 'none' : ''; });
+  }
+  document.getElementById('aHideLayout').addEventListener('change', applyLayoutA);
+  applyLayoutA();
+
+  var otherObjects = {
+    init_env: ['init_env', 'Orchestration · added', 'A new job. Every component is shown as <span class="new">added</span>: Start, Set region (Python Script), End Success.'],
+    weekly_rollup: ['weekly_rollup', 'Orchestration · layout only', '4 components moved. No semantic changes. Turn off "Hide layout-only" to list the moves.'],
+    t_orders_enrich: ['t_orders_enrich', 'Transformation · 2 modified', 'Join Orders/Customers: Join Expression changed.<br>Calc Net: calculated column <b>net_amount</b> changed (grid row 3).'],
+    t_legacy_customers: ['t_legacy_customers', 'Transformation · deleted', 'Job removed on this branch. 12 components shown as <span class="old">removed</span>.'],
+    'README.md': ['README.md', 'Plain text file', 'Not a Matillion object, so a standard text diff is shown.']
+  };
+  document.querySelectorAll('#aTree .obj').forEach(function (o) {
+    o.addEventListener('click', function () {
+      document.querySelectorAll('#aTree .obj').forEach(function (x) { x.classList.remove('sel'); });
+      o.classList.add('sel');
+      var k = o.getAttribute('data-obj');
+      if (k === 'daily_load') {
+        aCenter.innerHTML = aCenterHTML; wireA(); applyLayoutA(); aInsp.innerHTML = inspA['lo-sql'];
+      } else {
+        var d = otherObjects[k];
+        aCenter.innerHTML = '<div class="center-h"><h5>' + d[0] + '</h5><span class="mutedtxt">' + d[1] + '</span></div>' +
+          '<div class="placeholder">' + d[2] + '<br><br><small>(Only daily_load is fully mocked.)</small></div>';
+        aInsp.innerHTML = '<div class="insp-sub">Select a row to inspect it.</div>';
+      }
+    });
+  });
+
+  /* =========================================================
+     B · Canvas
+     ========================================================= */
+  var BW = 120, BH = 44;
+  var comps = {
+    1: { name: 'Start', type: 'Start', cat: 'flow' },
+    2: { name: 'Truncate Staging', type: 'SQL Script', cat: 'script' },
+    3: { name: 'Load Orders', newName: 'Load Orders (EU)', type: 'Database Query', cat: 'read' },
+    4: { name: 'Run t_orders_enrich', type: 'Run Transformation', cat: 'flow' },
+    5: { name: 'End Success', type: 'End Success', cat: 'flow' },
+    6: { name: 'Log Failure', type: 'SQL Script', cat: 'script' }
+  };
+  var basePos = { 1: [20, 100], 2: [170, 28], 3: [320, 90], 4: [500, 100], 5: [650, 100] };
+  var cmpPos  = { 1: [20, 100], 3: [345, 112], 4: [500, 100], 5: [650, 100], 6: [345, 218] };
+  var status  = { 1: 'same', 2: 'del', 3: 'mod', 4: 'same', 5: 'same', 6: 'add' };
+  var baseEdges = [[1, 2, 's'], [2, 3, 's'], [3, 4, 's'], [4, 5, 's']];
+  var cmpEdges  = [[1, 3, 's'], [3, 4, 's'], [4, 5, 's'], [3, 6, 'f']];
+  var drawer = {
+    1: ['Start', 'Unchanged.', ''],
+    2: ['Truncate Staging · removed', 'SQL Script', '<div class="codediff"><div class="d">- TRUNCATE TABLE stg.orders;</div></div>'],
+    3: ['Load Orders (EU) · modified', 'Database Query · renamed · moved',
+        '<div class="drawer-grid"><div><div class="kv"><span>Name</span><span><span class="old">Load Orders</span> → <span class="new">Load Orders (EU)</span></span></div>' +
+        '<div class="kv"><span>Position</span><span class="mutedtxt">320,90 → 345,112</span></div></div>' +
+        '<div class="codediff"><div>  SELECT * FROM orders</div><div class="a">+ WHERE region = \'EU\'</div></div></div>'],
+    4: ['Run t_orders_enrich', 'Unchanged parameters. Incoming connector source changed (via Load Orders).', ''],
+    5: ['End Success', 'Unchanged.', ''],
+    6: ['Log Failure · added', 'SQL Script · triggered on failure of Load Orders (EU)',
+        '<div class="codediff"><div class="a">+ INSERT INTO audit.job_failures (job_name, failed_at)</div><div class="a">+ VALUES (\'daily_load\', CURRENT_TIMESTAMP);</div></div>']
+  };
+  var bState = { mode: 'overlay', sel: 3, moves: false };
+
+  function key(e) { return e[0] + '-' + e[1] + '-' + e[2]; }
+  var baseKeys = {}, cmpKeys = {};
+  baseEdges.forEach(function (e) { baseKeys[key(e)] = 1; });
+  cmpEdges.forEach(function (e) { cmpKeys[key(e)] = 1; });
+
+  function edgePath(a, b) {
+    var sx, sy, tx, ty, d;
+    if (Math.abs(b[1] - a[1]) > BH + 10 && Math.abs(b[0] - a[0]) < BW) {
+      sx = a[0] + BW / 2; sy = a[1] + BH; tx = b[0] + BW / 2; ty = b[1];
+      var my = (sy + ty) / 2;
+      d = 'M' + sx + ',' + sy + ' C' + sx + ',' + my + ' ' + tx + ',' + my + ' ' + tx + ',' + ty;
+    } else {
+      sx = a[0] + BW; sy = a[1] + BH / 2; tx = b[0]; ty = b[1] + BH / 2;
+      var mx = (sx + tx) / 2;
+      d = 'M' + sx + ',' + sy + ' C' + mx + ',' + sy + ' ' + mx + ',' + ty + ' ' + tx + ',' + ty;
+    }
+    return { d: d, mx: (sx + tx) / 2, my: (sy + ty) / 2 };
+  }
+
+  function drawEdge(e, posA, posB, st) {
+    var p = edgePath(posA, posB);
+    var glyph = e[2] === 's' ? '✓' : '✗';
+    return '<path class="cv-edge ' + st + '" d="' + p.d + '"/>' +
+      '<circle class="cv-kind" cx="' + p.mx + '" cy="' + p.my + '" r="8"/>' +
+      '<text class="cv-kind-t" x="' + p.mx + '" y="' + (p.my + 3.5) + '" text-anchor="middle">' + glyph + '</text>';
+  }
+
+  function drawBox(id, pos, st, label) {
+    var c = comps[id], x = pos[0], y = pos[1];
+    var cls = 'cv-box' + (st !== 'same' ? ' ' + st : '') + (bState.sel === id ? ' sel' : '');
+    var s = '<g data-id="' + id + '" style="cursor:pointer">' +
+      '<rect class="' + cls + '" x="' + x + '" y="' + y + '" width="' + BW + '" height="' + BH + '" rx="7"/>' +
+      '<rect class="cv-cat-' + c.cat + '" x="' + (x + 1) + '" y="' + (y + 6) + '" width="4" height="' + (BH - 12) + '" rx="2"/>' +
+      '<text class="cv-name" x="' + (x + 12) + '" y="' + (y + 19) + '">' + esc(label) + '</text>' +
+      '<text class="cv-type" x="' + (x + 12) + '" y="' + (y + 34) + '">' + esc(c.type) + '</text>';
+    if (st !== 'same') {
+      var g = st === 'add' ? '+' : st === 'del' ? '−' : '~';
+      s += '<circle class="cv-stbg ' + st + '" cx="' + (x + BW) + '" cy="' + y + '" r="9"/>' +
+        '<text class="cv-st ' + st + '" x="' + (x + BW) + '" y="' + (y + 4) + '" text-anchor="middle">' + g + '</text>';
+    }
+    return s + '</g>';
+  }
+
+  function svg(inner) {
+    return '<svg viewBox="0 0 800 290" preserveAspectRatio="xMidYMid meet">' + inner + '</svg>';
+  }
+
+  function renderSide(which) {
+    var pos = which === 'before' ? basePos : cmpPos;
+    var edges = which === 'before' ? baseEdges : cmpEdges;
+    var other = which === 'before' ? cmpKeys : baseKeys;
+    var s = '';
+    edges.forEach(function (e) {
+      var st = other[key(e)] ? 'same' : (which === 'before' ? 'del' : 'add');
+      s += drawEdge(e, pos[e[0]], pos[e[1]], st);
+    });
+    Object.keys(pos).forEach(function (k) {
+      var id = +k, st = status[id];
+      var label = which === 'after' && comps[id].newName ? comps[id].newName : comps[id].name;
+      s += drawBox(id, pos[id], st, label);
+    });
+    return s;
+  }
+
+  function renderOverlay() {
+    var s = '';
+    // moved ghost behind
+    if (bState.moves) {
+      var o = basePos[3], n = cmpPos[3];
+      s += '<rect class="cv-ghost" x="' + o[0] + '" y="' + o[1] + '" width="' + BW + '" height="' + BH + '" rx="7"/>' +
+        '<text class="cv-movenote" x="' + o[0] + '" y="' + (o[1] - 5) + '">was here (' + o[0] + ',' + o[1] + ')</text>';
+    }
+    function at(id) { return cmpPos[id] || basePos[id]; }
+    baseEdges.forEach(function (e) { if (!cmpKeys[key(e)]) s += drawEdge(e, at(e[0]), at(e[1]), 'del'); });
+    cmpEdges.forEach(function (e) { s += drawEdge(e, at(e[0]), at(e[1]), baseKeys[key(e)] ? 'same' : 'add'); });
+    Object.keys(comps).forEach(function (k) {
+      var id = +k;
+      s += drawBox(id, at(id), status[id], comps[id].newName || comps[id].name);
+    });
+    return s;
+  }
+
+  function renderB() {
+    var stage = document.getElementById('bStage');
+    var m = bState.mode, html;
+    if (m === 'side') {
+      html = '<div class="cv-pane"><span class="cv-label">Base · main</span>' + svg(renderSide('before')) + '</div>' +
+             '<div class="cv-pane"><span class="cv-label">Compare · feature/eu-orders</span>' + svg(renderSide('after')) + '</div>';
+    } else if (m === 'overlay') {
+      html = '<div class="cv-pane"><span class="cv-label">Overlay</span>' + svg(renderOverlay()) + '</div>';
+    } else {
+      html = '<div class="cv-pane"><span class="cv-label">' + (m === 'before' ? 'Base · main' : 'Compare · feature/eu-orders') + '</span>' + svg(renderSide(m)) + '</div>';
+    }
+    stage.innerHTML = html;
+    stage.querySelectorAll('g[data-id]').forEach(function (g) {
+      g.addEventListener('click', function () { bState.sel = +g.getAttribute('data-id'); renderB(); });
+    });
+    var d = drawer[bState.sel];
+    document.getElementById('bDrawer').innerHTML = '<h6>' + d[0] + '</h6><div class="mutedtxt" style="margin-bottom:6px">' + d[1] + '</div>' + d[2];
+  }
+  document.querySelectorAll('#bMode button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#bMode button').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on'); bState.mode = b.getAttribute('data-m'); renderB();
+    });
+  });
+  document.getElementById('bShowMoves').addEventListener('change', function (e) { bState.moves = e.target.checked; renderB(); });
+  renderB();
+
+  /* =========================================================
+     C · Review feed
+     ========================================================= */
+  var cFilter = 'all';
+  function applyC() {
+    document.querySelectorAll('#feed .card').forEach(function (c) {
+      var cat = c.getAttribute('data-c');
+      var show = cFilter === 'all' ? cat !== 'layout' || isLayoutOnlyObject(c) : cat === cFilter;
+      c.classList.toggle('hidden', !show);
+    });
+  }
+  function isLayoutOnlyObject(card) {
+    // Layout cards are shown under "All" only when the whole object is layout-only.
+    return card.closest('.fobj').querySelectorAll('.card:not([data-c="layout"])').length === 0;
+  }
+  document.querySelectorAll('#cChips .chipf').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#cChips .chipf').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on'); cFilter = b.getAttribute('data-f'); applyC();
+    });
+  });
+  var rvs = document.querySelectorAll('#feed .rv');
+  rvs.forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      cb.closest('.fobj').classList.toggle('done', cb.checked);
+      var n = document.querySelectorAll('#feed .rv:checked').length;
+      document.getElementById('cProgTxt').textContent = n + ' of ' + rvs.length + ' objects reviewed';
+      document.getElementById('cBar').style.width = (n / rvs.length * 100) + '%';
+    });
+  });
+  applyC();
+
+  /* =========================================================
+     D · Time machine
+     ========================================================= */
+  var commits = [
+    { sha: '1a2b3c4', date: 'Aug 12', who: 'JS', msg: 'Initial daily_load' },
+    { sha: '5d6e7f8', date: 'Aug 19', who: 'AK', msg: 'Add enrich transformation step' },
+    { sha: '9a0b1c2', date: 'Sep 02', who: 'JS', msg: 'Tidy canvas' },
+    { sha: '3d4e5f6', date: 'Sep 09', who: 'MR', msg: 'Truncate staging before load' },
+    { sha: '7a8b9c0', date: 'Sep 23', who: 'AK', msg: 'Load orders: add date filter' },
+    { sha: '4f2a91c', date: 'Sep 30', who: 'JS', msg: 'Merge release 2.3', ref: 'main' },
+    { sha: 'e19d7aa', date: 'Oct 02', who: 'MR', msg: 'EU region split' },
+    { sha: 'b71e0d3', date: 'Oct 04', who: 'MR', msg: 'Log load failures', ref: 'feature/eu-orders' }
+  ];
+  var rows = [
+    ['Start',               ['add', '', 'lay', '', '', '', '', '']],
+    ['Truncate Staging',    ['', '', '', 'add', '', '', 'del', '']],
+    ['Load Orders (EU)',    ['add', '', 'lay', 'mod', 'mod', '', 'mod', 'lay']],
+    ['Run t_orders_enrich', ['', 'add', 'lay', '', '', '', '', '']],
+    ['End Success',         ['add', '', '', '', '', '', '', '']],
+    ['Log Failure',         ['', '', '', '', '', '', '', 'add']],
+    ['Job variables',       ['add', '', '', '', 'mod', '', 'add', '']],
+    ['Notes',               ['', '', 'add', '', '', '', '', '']]
+  ];
+  var glyph = { add: '+', del: '−', mod: '~', lay: '↔', '': '' };
+  var rank = { '': 0, lay: 1, mod: 2, add: 3, del: 4 };
+  var dSel = [6, 7];  // inclusive range of commit indexes; base = parent of first
+
+  function renderD() {
+    var hideLay = document.getElementById('dHideLayout').checked;
+    var t = document.getElementById('dMatrix');
+    var lo = Math.min(dSel[0], dSel[1]), hi = Math.max(dSel[0], dSel[1]);
+    var h = '<tr><th></th>';
+    commits.forEach(function (c, i) {
+      var cls = 'c' + (i >= lo && i <= hi ? ' inrange' : '') + (i === lo - 1 ? ' base' : '');
+      h += '<th class="' + cls + '" data-i="' + i + '" title="' + esc(c.msg) + '"><span class="sha">' + c.sha.slice(0, 7) + '</span>' +
+        c.date + ' · ' + c.who + (c.ref ? '<br><span class="ref">' + esc(c.ref) + '</span>' : '') + '<span class="dot"></span></th>';
+    });
+    h += '<th style="padding-left:10px">Range</th></tr>';
+    var changedRows = 0;
+    rows.forEach(function (r) {
+      h += '<tr><td class="rn">' + esc(r[0]) + '</td>';
+      var agg = '';
+      r[1].forEach(function (k, i) {
+        if (hideLay && k === 'lay') k = '';
+        var inr = i >= lo && i <= hi;
+        if (inr && rank[k] > rank[agg]) agg = k;
+        h += '<td class="cell ' + k + (inr ? ' inrange' : '') + '">' + glyph[k] + '</td>';
+      });
+      if (agg) changedRows++;
+      h += '<td class="cell agg ' + agg + '" style="margin-left:10px">' + glyph[agg] + '</td></tr>';
+    });
+    t.innerHTML = h;
+    t.querySelectorAll('th.c').forEach(function (th) {
+      th.addEventListener('click', function (ev) {
+        var i = +th.getAttribute('data-i');
+        dSel = ev.shiftKey ? [dSel[0], i] : [i, i];
+        renderD();
+      });
+    });
+    var baseSha = lo > 0 ? commits[lo - 1].sha : '(empty)';
+    var msgs = commits.slice(lo, hi + 1).map(function (c) { return '<code>' + c.sha + '</code> ' + esc(c.msg); }).join('<br>');
+    document.getElementById('dFoot').innerHTML =
+      '<div class="msg">Comparing ' + baseSha + ' → ' + commits[hi].sha + ' · ' + (hi - lo + 1) + ' commit' + (hi > lo ? 's' : '') +
+      ' · ' + changedRows + ' of ' + rows.length + ' elements changed</div><div class="mutedtxt" style="margin-top:4px">' + msgs +
+      '</div><div style="margin-top:6px"><span class="pill k-mod">Open in Summary</span> <span class="pill k-mod">Open in Canvas</span></div>';
+  }
+  document.getElementById('dHideLayout').addEventListener('change', renderD);
+  renderD();
+
+  /* =========================================================
+     E · Canonical JSON
+     ========================================================= */
+  // [kind, base line, compare line]  kind: ' ' same, '-' removed, '+' added, '~' changed
+  // ' ' rows may differ only by a trailing comma; they are matched comma-insensitively.
+  function same(t) { return [' ', t, t]; }
+  var lines = [
+    same('{'),
+    same('  "job": "daily_load",'),
+    same('  "type": "ORCHESTRATION",'),
+    same('  "variables": {'),
+    [' ', '    "env": { "type": "TEXT", "value": "dev" }', '    "env": { "type": "TEXT", "value": "dev" },'],
+    ['+', null, '    "region": { "type": "TEXT", "value": "EU" }'],
+    same('  },'),
+    same('  "components": {'),
+    same('    "Start": { "type": "Start" },'),
+    ['-', '    "Truncate Staging": {', null],
+    ['-', '      "type": "SQL Script",', null],
+    ['-', '      "SQL Script": ["TRUNCATE TABLE stg.orders;"]', null],
+    ['-', '    },', null],
+    ['~', '    "Load Orders": {', '    "Load Orders (EU)": {'],
+    same('      "type": "Database Query",'),
+    same('      "SQL Query": ['),
+    same('        "SELECT *",'),
+    [' ', '        "FROM orders"', '        "FROM orders",'],
+    ['+', null, '        "WHERE region = \'EU\'"'],
+    same('      ],'),
+    same('      "Target Table": "stg.orders"'),
+    same('    },'),
+    same('    "Run t_orders_enrich": {'),
+    same('      "type": "Run Transformation",'),
+    same('      "Transformation Job": "t_orders_enrich"'),
+    same('    },'),
+    [' ', '    "End Success": { "type": "End Success" }', '    "End Success": { "type": "End Success" },'],
+    ['+', null, '    "Log Failure": {'],
+    ['+', null, '      "type": "SQL Script",'],
+    ['+', null, '      "SQL Script": ['],
+    ['+', null, '        "INSERT INTO audit.job_failures (job_name, failed_at)",'],
+    ['+', null, '        "VALUES (\'daily_load\', CURRENT_TIMESTAMP);"'],
+    ['+', null, '      ]'],
+    ['+', null, '    }'],
+    same('  },'),
+    same('  "connectors": ['),
+    ['-', '    "Start -success-> Truncate Staging",', null],
+    ['+', null, '    "Start -success-> Load Orders (EU)",'],
+    ['-', '    "Truncate Staging -success-> Load Orders",', null],
+    ['~', '    "Load Orders -success-> Run t_orders_enrich",', '    "Load Orders (EU) -success-> Run t_orders_enrich",'],
+    ['+', null, '    "Load Orders (EU) -failure-> Log Failure",'],
+    same('    "Run t_orders_enrich -success-> End Success"'),
+    same('  ]'),
+    same('}')
+  ];
+  function renderE(mode) {
+    var bl = 0, cl = 0, h = '<table class="tdiff">';
+    if (mode === 'split') {
+      lines.forEach(function (l) {
+        var k = l[0];
+        var lc = k === '-' || k === '~' ? 'del' : (l[1] === null ? 'empty' : '');
+        var rc = k === '+' || k === '~' ? 'add' : (l[2] === null ? 'empty' : '');
+        var ln = l[1] !== null ? ++bl : '', rn = l[2] !== null ? ++cl : '';
+        h += '<tr><td class="ln">' + ln + '</td><td class="' + lc + '">' + (l[1] !== null ? esc(l[1]) : '') + '</td>' +
+             '<td class="ln sep">' + rn + '</td><td class="' + rc + '">' + (l[2] !== null ? esc(l[2]) : '') + '</td></tr>';
+      });
+    } else {
+      lines.forEach(function (l) {
+        var k = l[0];
+        if (k === ' ') { bl++; cl++; h += '<tr><td class="ln">' + bl + '</td><td class="ln">' + cl + '</td><td class="gut"> </td><td>' + esc(l[2]) + '</td></tr>'; }
+        if (k === '-' || k === '~') { bl++; h += '<tr><td class="ln">' + bl + '</td><td class="ln"></td><td class="gut del">-</td><td class="del">' + esc(l[1]) + '</td></tr>'; }
+        if (k === '+' || k === '~') { cl++; h += '<tr><td class="ln"></td><td class="ln">' + cl + '</td><td class="gut add">+</td><td class="add">' + esc(l[2]) + '</td></tr>'; }
+      });
+    }
+    document.getElementById('eText').innerHTML = h + '</table>';
+  }
+  document.querySelectorAll('#eMode button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#eMode button').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on'); renderE(b.getAttribute('data-m'));
+    });
+  });
+  renderE('split');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matillion Diff Architecture</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --surface: #ffffff;
+    --surface-2: #f3f1ed;
+    --text: #1f1d1a;
+    --muted: #6b665e;
+    --border: #e2ded6;
+    --accent: #2f5fd0;
+    --accent-soft: #e6edfb;
+    --code-bg: #f5f3ef;
+
+    --add: #1e7a3c;   --add-bg: #e3f4e8;
+    --del: #b3261e;   --del-bg: #fbe6e4;
+    --mod: #9a6200;   --mod-bg: #fdf1d8;
+    --ren: #6b3fb5;   --ren-bg: #efe8fb;
+    --lay: #5c6773;   --lay-bg: #eceff2;
+
+    --radius: 10px;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161514; --surface: #1e1d1b; --surface-2: #262522; --text: #ebe8e2; --muted: #a39d93;
+      --border: #36342f; --accent: #7fa2ff; --accent-soft: #23304d; --code-bg: #232220;
+      --add: #6fcf8a; --add-bg: #1d3325; --del: #ff8a80; --del-bg: #3a1f1d;
+      --mod: #f0b85a; --mod-bg: #3a2e17; --ren: #c3a4ff; --ren-bg: #2d2540; --lay: #a9b4bf; --lay-bg: #262b31;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161514; --surface: #1e1d1b; --surface-2: #262522; --text: #ebe8e2; --muted: #a39d93;
+    --border: #36342f; --accent: #7fa2ff; --accent-soft: #23304d; --code-bg: #232220;
+    --add: #6fcf8a; --add-bg: #1d3325; --del: #ff8a80; --del-bg: #3a1f1d;
+    --mod: #f0b85a; --mod-bg: #3a2e17; --ren: #c3a4ff; --ren-bg: #2d2540; --lay: #a9b4bf; --lay-bg: #262b31;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 var(--sans);
+  }
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1240px; margin: 0 auto; }
+  nav.toc {
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    padding: 32px 16px 32px 24px; border-right: 1px solid var(--border); font-size: 14px;
+  }
+  nav.toc .brand { font-weight: 650; margin-bottom: 4px; }
+  nav.toc .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+  nav.toc li { counter-increment: toc; }
+  nav.toc a {
+    display: block; padding: 4px 8px; border-radius: 6px; color: var(--muted); text-decoration: none;
+  }
+  nav.toc a::before { content: counter(toc) ". "; opacity: .6; }
+  nav.toc a:hover { color: var(--text); background: var(--surface-2); }
+  nav.toc a.active { color: var(--accent); background: var(--accent-soft); }
+  .theme-btn {
+    margin-top: 20px; font: inherit; font-size: 13px; background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+
+  main { padding: 40px 48px 120px; min-width: 0; }
+  header.doc h1 { font-size: 34px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+  header.doc .meta { color: var(--muted); font-size: 14px; }
+  .lede { font-size: 18px; color: var(--text); max-width: 72ch; }
+
+  section { padding-top: 24px; margin-top: 24px; border-top: 1px solid var(--border); }
+  h2 { font-size: 24px; margin: 8px 0 12px; }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  p, li { max-width: 78ch; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre {
+    font-family: var(--mono); font-size: 13px; line-height: 1.5; background: var(--code-bg);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; margin: 12px 0;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .k { color: var(--ren); } .c { color: var(--muted); font-style: italic; } .s { color: var(--add); }
+
+  .callout {
+    border-left: 4px solid var(--accent); background: var(--accent-soft);
+    padding: 12px 16px; border-radius: 0 var(--radius) var(--radius) 0; margin: 16px 0;
+  }
+  .callout.warn { border-color: var(--mod); background: var(--mod-bg); }
+  .callout strong:first-child { display: block; margin-bottom: 2px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 12px 0; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .table-wrap { overflow-x: auto; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .panel > .ph { padding: 8px 12px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  .panel pre { margin: 0; border: 0; border-radius: 0; }
+
+  .diffline { display: block; }
+  .diffline.add { background: var(--add-bg); color: var(--add); }
+  .diffline.del { background: var(--del-bg); color: var(--del); }
+  .diffline.hunk { color: var(--accent); }
+
+  .sem { font-family: var(--mono); font-size: 13px; padding: 14px 16px; line-height: 1.75; }
+  .tag { display: inline-block; font-size: 11px; font-family: var(--sans); font-weight: 600; padding: 0 7px; border-radius: 999px; vertical-align: 1px; }
+  .t-add { color: var(--add); background: var(--add-bg); }
+  .t-del { color: var(--del); background: var(--del-bg); }
+  .t-mod { color: var(--mod); background: var(--mod-bg); }
+  .t-ren { color: var(--ren); background: var(--ren-bg); }
+  .t-lay { color: var(--lay); background: var(--lay-bg); }
+  .g-add { color: var(--add); font-weight: 700; } .g-del { color: var(--del); font-weight: 700; }
+  .g-mod { color: var(--mod); font-weight: 700; } .g-lay { color: var(--lay); font-weight: 700; }
+  .old { color: var(--del); text-decoration: line-through; } .new { color: var(--add); }
+
+  /* Layer diagram */
+  .layers { display: grid; gap: 10px; margin: 16px 0; }
+  .layer { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 12px 14px; }
+  .layer h4 { margin: 0 0 8px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .layer h4 span { font-weight: 400; color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 13px; border: 1px solid var(--border); background: var(--surface-2); border-radius: 6px; padding: 3px 8px; }
+  .chip.ro { border-color: var(--add); }
+  .layer.l-pres { border-top: 3px solid var(--accent); }
+  .layer.l-app  { border-top: 3px solid var(--ren); }
+  .layer.l-dom  { border-top: 3px solid var(--add); }
+  .layer.l-inf  { border-top: 3px solid var(--mod); }
+  .arrow-down { text-align: center; color: var(--muted); font-size: 13px; line-height: 1; }
+
+  svg.diagram { width: 100%; height: auto; display: block; margin: 12px 0; }
+  svg.diagram .box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+  svg.diagram .box.hl { stroke: var(--accent); }
+  svg.diagram .box.ro { stroke: var(--add); }
+  svg.diagram text { fill: var(--text); font: 13px var(--sans); }
+  svg.diagram text.small { fill: var(--muted); font-size: 11px; }
+  svg.diagram text.title { font-weight: 600; }
+  svg.diagram .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  svg.diagram .edge.blocked { stroke: var(--del); stroke-dasharray: 5 4; }
+  svg.diagram .ah { fill: var(--muted); }
+  svg.diagram .ah.blocked { fill: var(--del); }
+  svg.diagram .lane { fill: none; stroke: var(--border); stroke-dasharray: 4 4; }
+
+  .phase { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .phase .label { font-weight: 650; }
+  .phase .label small { display: block; color: var(--muted); font-weight: 400; }
+  .phase ul { margin: 0; padding-left: 18px; }
+
+  details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin: 10px 0; }
+  details summary { cursor: pointer; padding: 10px 14px; font-weight: 600; }
+  details > div { padding: 0 14px 12px; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 16px; }
+    nav.toc ol { columns: 2; }
+    main { padding: 24px 16px 80px; }
+    .two-col { grid-template-columns: 1fr; }
+    .phase { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <div class="brand">Matillion Diff</div>
+    <div class="sub">Architecture draft · v0.1</div>
+    <ol id="toc">
+      <li><a href="#goals">Goals &amp; scope</a></li>
+      <li><a href="#problem">The problem</a></li>
+      <li><a href="#assumptions">Repository assumptions</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#platform">Platform &amp; stack</a></li>
+      <li><a href="#overview">Architecture overview</a></li>
+      <li><a href="#readonly">Read-only guarantee</a></li>
+      <li><a href="#source">Repository access</a></li>
+      <li><a href="#model">Matillion model</a></li>
+      <li><a href="#variants">Matillion ETL variants</a></li>
+      <li><a href="#diff">Semantic diff engine</a></li>
+      <li><a href="#presentation">Presentation &amp; state</a></li>
+      <li><a href="#flow">Data flow</a></li>
+      <li><a href="#perf">Performance &amp; caching</a></li>
+      <li><a href="#structure">Project structure</a></li>
+      <li><a href="#errors">Error handling</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#risks">Risks &amp; open questions</a></li>
+    </ol>
+    <button class="theme-btn" id="themeBtn" type="button">Toggle theme</button>
+  </nav>
+
+  <main>
+    <header class="doc">
+      <h1>Matillion Diff: a read-only visual diff for Matillion ETL repositories</h1>
+      <div class="meta">Architecture draft · Flutter · 2026-10-05 · Companion document: <a href="ui-design.html">UI design proposals</a></div>
+    </header>
+    <p class="lede">
+      Matillion ETL stores every job as a deeply nested JSON document. Ordinary diff tools compare those files line by line,
+      so a one-word change to a component turns into a wall of brace and slot noise. Matillion Diff reads a Git repository,
+      parses the Matillion objects into a proper domain model, and shows <em>what changed in the job</em>
+      (components, parameters, connections, variables) rather than what changed in the text.
+      It never writes to the repository.
+    </p>
+    <div class="callout">
+      <strong>Scope: Matillion ETL for Azure Synapse first.</strong>
+      The first release supports Matillion ETL for Azure Synapse only. Everything that differs between Matillion ETL variants
+      (which component types exist, their parameters, the SQL dialect) is kept in data files, so that other variants such as
+      Snowflake, Redshift, BigQuery or Delta Lake on Databricks can be added later without changing the parser or the diff engine.
+      See <a href="#variants">Matillion ETL variants</a>.
+    </div>
+
+    <!-- 1 -->
+    <section id="goals">
+      <h2>Goals &amp; scope</h2>
+      <h3>Goals</h3>
+      <ul>
+        <li><strong>Semantic diffs.</strong> Compare two revisions of a Matillion job as a job: added, removed, renamed and modified components, changed parameter values, rewired connectors, changed variables and notes.</li>
+        <li><strong>Visual diffs.</strong> Show the change on a canvas that looks like the Matillion job canvas, with change status layered on top.</li>
+        <li><strong>Noise suppression.</strong> Separate meaningful changes from cosmetic ones (canvas coordinates, map ordering, internal ID churn) and hide the cosmetic ones by default.</li>
+        <li><strong>Repository navigation.</strong> Pick any two revisions (branch, tag, commit, working tree), see which Matillion objects changed, and browse the history of a single job.</li>
+        <li><strong>Strictly read-only.</strong> The app cannot modify the repository, and the code is built so that it has no way to.</li>
+        <li><strong>Synapse now, other variants later.</strong> Support Matillion ETL for Azure Synapse in the first release, and add other Matillion ETL variants by adding a variant profile, not by changing code.</li>
+      </ul>
+      <h3>Non-goals</h3>
+      <ul>
+        <li>Editing, merging, resolving conflicts, committing, pushing, or creating branches or tags.</li>
+        <li>Running or validating jobs, or connecting to a Matillion instance.</li>
+        <li>Replacing a general Git client. Non-Matillion files appear only as plain text diffs.</li>
+      </ul>
+    </section>
+
+    <!-- 2 -->
+    <section id="problem">
+      <h2>The problem, concretely</h2>
+      <p>
+        Below, the same change is shown twice: a component was renamed, its SQL was changed, it was nudged on the canvas,
+        and a step that logs failures was added. On the left is what <code>git diff</code> shows (abridged). On the right is what Matillion Diff should show.
+      </p>
+      <div class="two-col">
+        <div class="panel">
+          <div class="ph">git diff: 214 changed lines</div>
+<pre><code><span class="diffline hunk">@@ -112,14 +112,14 @@</span>        "parameters": {
+          "1": {
+            "slot": 1,
+            "name": "Name",
+            "elements": {
+              "1": {
+                "slot": 1,
+                "values": {
+                  "1": {
+                    "type": "STRING",
+<span class="diffline del">-                   "value": "Load Orders"</span><span class="diffline add">+                   "value": "Load Orders (EU)"</span>                  }
+<span class="diffline hunk">@@ -131,9 +131,9 @@</span><span class="diffline del">-       "x": 320,</span><span class="diffline del">-       "y": 96,</span><span class="diffline add">+       "x": 352,</span><span class="diffline add">+       "y": 112,</span><span class="diffline hunk">@@ -188,7 +188,7 @@</span><span class="diffline del">-  "value": "SELECT * FROM orders"</span><span class="diffline add">+  "value": "SELECT * FROM orders\nWHERE region = 'EU'"</span><span class="diffline hunk">@@ -402,0 +402,96 @@</span><span class="diffline add">+    "1290413": {</span><span class="diffline add">+      "id": 1290413,</span><span class="diffline add">+      "implementationID": -798585337,</span><span class="diffline add">+      ... 93 more lines</span></code></pre>
+        </div>
+        <div class="panel">
+          <div class="ph">Matillion Diff: 4 changes</div>
+          <div class="sem">
+            Orchestration job <strong>daily_load</strong><br>
+            <span class="g-mod">~</span> Component <span class="old">Load Orders</span> → <span class="new">Load Orders (EU)</span> <span class="tag t-ren">renamed</span><br>
+            &nbsp;&nbsp;&nbsp;<span class="g-mod">~</span> SQL Query <span class="tag t-mod">1 line added</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="new">+ WHERE region = 'EU'</span><br>
+            &nbsp;&nbsp;&nbsp;<span class="g-lay">↔</span> moved on canvas <span class="tag t-lay">layout</span><br>
+            <span class="g-add">+</span> Component <strong>Log Failure</strong> (SQL Script) <span class="tag t-add">added</span><br>
+            <span class="g-add">+</span> Connector Load Orders (EU) <span style="color:var(--muted)">─ on failure →</span> Log Failure <span class="tag t-add">added</span>
+          </div>
+        </div>
+      </div>
+      <p>Line diffs fail on Matillion JSON for structural reasons:</p>
+      <ul>
+        <li><strong>Slot maps.</strong> Parameters, elements and values are objects keyed by slot numbers (<code>"1"</code>, <code>"2"</code>, …). The meaningful key (the parameter name) sits several levels deeper than the change.</li>
+        <li><strong>Opaque identifiers.</strong> Components are keyed by numeric IDs and typed by <code>implementationID</code> hashes. Connectors refer to components by ID only.</li>
+        <li><strong>Layout noise.</strong> Moving a component changes <code>x</code>, <code>y</code>, <code>width</code> and <code>height</code>, which buries real changes.</li>
+        <li><strong>Embedded code.</strong> SQL and Python sit inside JSON strings with escaped newlines, so a one-line SQL edit shows up as one huge changed line.</li>
+        <li><strong>Grids.</strong> Grid parameters such as column mappings are nested row/column slot maps. Inserting one row shifts every slot that follows it.</li>
+      </ul>
+    </section>
+
+    <!-- 3 -->
+    <section id="assumptions">
+      <h2>Repository assumptions</h2>
+      <div class="callout warn">
+        <strong>Verify against a real repository before implementation.</strong>
+        The object format below is the Matillion ETL job export format as it is generally understood. The exact folder layout written by
+        Matillion's Git integration, and the full set of object types, need to be confirmed against a sample repository. The design deliberately
+        <em>does not depend on file paths</em>: objects are recognised by sniffing their content.
+      </div>
+      <p>Expected shape of a job document (simplified):</p>
+<pre><code>{
+  <span class="s">"info"</span>: { "name": "daily_load", "type": "ORCHESTRATION", "description": "...", "tag": "..." },
+  <span class="s">"job"</span>: {
+    "components": {
+      "1290410": {
+        "id": 1290410, "implementationID": 444132438,      <span class="c">// component type, e.g. Start</span>
+        "x": 96, "y": 96, "width": 32, "height": 32,       <span class="c">// layout: cosmetic</span>
+        "parameters": {
+          "1": { "slot": 1, "name": "Name",
+                 "elements": { "1": { "slot": 1, "values": { "1": { "type": "STRING", "value": "Start 0" } } } } }
+        },
+        "inputConnectorIDs": [], "outputSuccessConnectorIDs": [1290420], ...
+      }
+    },
+    "successConnectors":       { "1290420": { "id": 1290420, "sourceID": 1290410, "targetID": 1290411 } },
+    "failureConnectors":       { ... },
+    "unconditionalConnectors": { ... },
+    "trueConnectors": { ... }, "falseConnectors": { ... }, "iterationConnectors": { ... },
+    "notes":     { "77": { "id": 77, "x": 0, "y": 0, "width": 200, "height": 80, "theme": "yellow", "content": "..." } },
+    "variables": { "env": { "name": "env", "type": "TEXT", "value": "dev", ... } },
+    "grids":     { ... }
+  }
+}</code></pre>
+      <p>
+        Detection rule: a <code>.json</code> file is a <em>Matillion job</em> if its root has <code>info.type</code> in
+        {<code>ORCHESTRATION</code>, <code>TRANSFORMATION</code>} and a <code>job.components</code> object.
+        Further object kinds (environments, project variables, schedules, shared jobs) get their own <code>ObjectAdapter</code> once samples are available.
+        Anything else falls back to a generic, key-sorted JSON tree diff.
+      </p>
+    </section>
+
+    <!-- 4 -->
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <h3>Functional</h3>
+      <div class="table-wrap"><table>
+        <tr><th>ID</th><th>Requirement</th><th>Phase</th></tr>
+        <tr><td>F1</td><td>Open a local clone, or a remote URL that is mirrored into an app-owned cache.</td><td>MVP</td></tr>
+        <tr><td>F2</td><td>Select a base and a compare revision (branch, tag, commit SHA, or working tree).</td><td>MVP</td></tr>
+        <tr><td>F3</td><td>List the Matillion objects changed between the two revisions, grouped by object type and folder, with per-object change counts.</td><td>MVP</td></tr>
+        <tr><td>F4</td><td>Structured diff of one job: info, components, parameters, connectors, variables, grids, notes.</td><td>MVP</td></tr>
+        <tr><td>F5</td><td>Inline text diff for long parameter values (SQL, Python, Bash), with syntax highlighting.</td><td>MVP</td></tr>
+        <tr><td>F6</td><td>Row-aware diff for grid parameters (column mappings, filter lists, and so on).</td><td>v1</td></tr>
+        <tr><td>F7</td><td>Visual canvas diff (side-by-side, overlay, before, after).</td><td>v1</td></tr>
+        <tr><td>F8</td><td>History of one job: the commits that touched it, and a diff between any two of them.</td><td>v1</td></tr>
+        <tr><td>F9</td><td>Canonical JSON view: the job rewritten as stable, readable JSON (names instead of slots and IDs, no layout) so that line diffs become meaningful.</td><td>MVP</td></tr>
+        <tr><td>F10</td><td>Filters: hide layout-only changes, filter by change kind or by component type, and search.</td><td>MVP</td></tr>
+        <tr><td>F11</td><td>Hosted-provider sources (GitHub, GitLab, Azure DevOps, Bitbucket) through read-only APIs, which enables a web build.</td><td>v2</td></tr>
+        <tr><td>F12</td><td>Headless CLI and <code>git textconv</code> helper built on the same diff engine.</td><td>v2</td></tr>
+        <tr><td>F13</td><td>Variant profile for Matillion ETL for Azure Synapse: available component types, parameter hints, T-SQL highlighting.</td><td>MVP</td></tr>
+        <tr><td>F14</td><td>Profiles for further Matillion ETL variants (Snowflake, Redshift, BigQuery, Delta Lake on Databricks).</td><td>v2</td></tr>
+      </table></div>
+      <h3>Non-functional</h3>
+      <ul>
+        <li><strong>Read-only:</strong> no code path in the app can change refs, objects, the index, the working tree or the remote. See <a href="#readonly">§7</a>.</li>
+        <li><strong>Performance:</strong> a 300-component job is parsed and diffed in under 200 ms on a mid-range laptop, and the UI never blocks.</li>
+        <li><strong>Offline:</strong> local repositories work with no network.</li>
+        <li><strong>Platforms:</strong> Windows, macOS and Linux desktop first. Web later (F11).</li>
+        <li><strong>Extensibility:</strong> adding a Matillion ETL variant means adding a profile file and test fixtures. The parser, the diff engine and the UI stay unchanged.</li>
+        <li><strong>Safety with untrusted repositories:</strong> opening a repository never executes repository-supplied code (hooks, fsmonitor, external diff drivers, textconv).</li>
+      </ul>
+    </section>
+
+    <!-- 5 -->
+    <section id="platform">
+      <h2>Platform &amp; technology stack</h2>
+      <div class="table-wrap"><table>
+        <tr><th>Concern</th><th>Choice</th><th>Rationale</th></tr>
+        <tr><td>UI framework</td><td>Flutter 3.x, desktop targets first</td><td>One codebase for Windows, macOS and Linux, with a later path to web. <code>CustomPainter</code> suits the canvas diff.</td></tr>
+        <tr><td>Language</td><td>Dart 3 (sealed classes, records, patterns)</td><td>Sealed change types give exhaustive <code>switch</code> checks in the renderers.</td></tr>
+        <tr><td>State management</td><td><code>flutter_riverpod</code></td><td>Async providers fit the "pick revisions, load, diff" flow. Each provider can be overridden in tests.</td></tr>
+        <tr><td>Navigation</td><td><code>go_router</code></td><td>Deep links such as <code>/compare/main..feature-x/job/orchestration/daily_load</code>.</td></tr>
+        <tr><td>Git access (desktop)</td><td>System <code>git</code> CLI behind an allowlisted wrapper</td><td>Mature, fast, handles every auth setup the user already has. The Dart libgit2 bindings are not well maintained.</td></tr>
+        <tr><td>Git access (web, v2)</td><td>Hosted REST APIs via <code>package:http</code></td><td><code>dart:io</code> is not available on web. Read-only token scopes give a second layer of protection.</td></tr>
+        <tr><td>Text diff</td><td><code>diff_match_patch</code> or an in-house Myers diff</td><td>Used for SQL and script parameters and the canonical JSON view.</td></tr>
+        <tr><td>Syntax highlighting</td><td><code>re_highlight</code> (or similar)</td><td>SQL, Python and Bash inside parameter values. The SQL dialect comes from the variant profile (T-SQL for Synapse).</td></tr>
+        <tr><td>Panes</td><td><code>multi_split_view</code></td><td>Resizable IDE-style panes.</td></tr>
+        <tr><td>Secrets</td><td><code>flutter_secure_storage</code></td><td>Hosted-provider tokens only. Local Git uses the user's own credential helper.</td></tr>
+        <tr><td>Workspace</td><td>Dart pub workspaces (monorepo)</td><td>The engine packages are pure Dart and reusable from a CLI.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 6 -->
+    <section id="overview">
+      <h2>Architecture overview</h2>
+      <p>
+        A layered (ports-and-adapters) design. The <strong>domain</strong>, which covers the Matillion model and the diff engine, is pure Dart with no
+        Flutter or I/O dependencies. Infrastructure plugs in behind <strong>read-only ports</strong>, and the Flutter UI only talks to application use cases.
+      </p>
+      <div class="layers">
+        <div class="layer l-pres">
+          <h4>Presentation (Flutter) <span>widgets, view models, routing, theming</span></h4>
+          <div class="chips">
+            <span class="chip">RepoPickerScreen</span><span class="chip">CompareBar</span><span class="chip">ChangedObjectsTree</span>
+            <span class="chip">SummaryView</span><span class="chip">StructureTreeView</span><span class="chip">CanvasDiffView</span>
+            <span class="chip">CanonicalJsonView</span><span class="chip">HistoryView</span><span class="chip">Riverpod providers</span>
+          </div>
+        </div>
+        <div class="arrow-down">▼ calls use cases</div>
+        <div class="layer l-app">
+          <h4>Application <span>use cases, orchestration, caching policy</span></h4>
+          <div class="chips">
+            <span class="chip">OpenRepository</span><span class="chip">ListRevisions</span><span class="chip">CompareRevisions</span>
+            <span class="chip">LoadObjectDiff</span><span class="chip">LoadObjectHistory</span><span class="chip">DiffCache (LRU)</span>
+            <span class="chip">IsolateRunner</span>
+          </div>
+        </div>
+        <div class="arrow-down">▼ depends on</div>
+        <div class="layer l-dom">
+          <h4>Domain (pure Dart packages) <span>no I/O, fully unit-testable</span></h4>
+          <div class="chips">
+            <span class="chip">matillion_model: parse + normalize</span><span class="chip">ObjectAdapter registry</span>
+            <span class="chip">ComponentTypeRegistry</span><span class="chip">matillion_diff: matcher, differ, classifier</span>
+            <span class="chip">CanonicalJsonPrinter</span><span class="chip">VariantProfile (Synapse)</span><span class="chip ro">RepositorySource port (read-only)</span>
+          </div>
+        </div>
+        <div class="arrow-down">▲ implements ports</div>
+        <div class="layer l-inf">
+          <h4>Infrastructure <span>adapters</span></h4>
+          <div class="chips">
+            <span class="chip ro">GitCliSource (allowlisted)</span><span class="chip ro">MirrorCache (app-owned clone)</span>
+            <span class="chip ro">WorkingTreeReader</span><span class="chip ro">GitHubSource · GitLabSource · AzureDevOpsSource (v2)</span>
+            <span class="chip">SettingsStore</span><span class="chip">SecureTokenStore</span>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:14px;color:var(--muted)">Chips outlined in green are repository-facing and read-only.</p>
+    </section>
+
+    <!-- 7 -->
+    <section id="readonly">
+      <h2>The read-only guarantee</h2>
+      <p>
+        "View only" is the core product promise, so it is enforced in several independent layers. If one layer has a bug, the others still hold.
+      </p>
+      <svg class="diagram" viewBox="0 0 820 250" role="img" aria-label="Read-only defense layers: the app talks only to a read-only port; the git wrapper allows only read subcommands; push and write commands are blocked.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah blocked" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box hl" x="10" y="90" width="140" height="64" rx="8"/>
+        <text class="title" x="80" y="118" text-anchor="middle">Use cases</text>
+        <text class="small" x="80" y="138" text-anchor="middle">LoadObjectDiff, …</text>
+
+        <rect class="box ro" x="200" y="90" width="170" height="64" rx="8"/>
+        <text class="title" x="285" y="118" text-anchor="middle">RepositorySource</text>
+        <text class="small" x="285" y="138" text-anchor="middle">port with no write methods</text>
+
+        <rect class="box ro" x="420" y="90" width="170" height="64" rx="8"/>
+        <text class="title" x="505" y="118" text-anchor="middle">ReadOnlyGit</text>
+        <text class="small" x="505" y="138" text-anchor="middle">subcommand allowlist</text>
+
+        <rect class="box" x="640" y="40" width="170" height="54" rx="8"/>
+        <text class="title" x="725" y="64" text-anchor="middle">git log / cat-file …</text>
+        <text class="small" x="725" y="82" text-anchor="middle">allowed</text>
+
+        <rect class="box" x="640" y="150" width="170" height="54" rx="8" style="stroke:var(--del)"/>
+        <text class="title" x="725" y="174" text-anchor="middle">push / commit / reset</text>
+        <text class="small" x="725" y="192" text-anchor="middle">ReadOnlyViolation thrown</text>
+
+        <path class="edge" d="M150,122 L198,122" marker-end="url(#ah)"/>
+        <path class="edge" d="M370,122 L418,122" marker-end="url(#ah)"/>
+        <path class="edge" d="M590,110 L638,72" marker-end="url(#ah)"/>
+        <path class="edge blocked" d="M590,134 L638,172" marker-end="url(#ahb)"/>
+        <rect class="lane" x="190" y="20" width="410" height="200" rx="12"/>
+        <text class="small" x="200" y="238">Layers 1–2: enforced in code (compile time and run time)</text>
+      </svg>
+      <ol>
+        <li><strong>Port design, enforced at compile time.</strong> <code>RepositorySource</code> exposes only query methods. There is no <code>commit</code>, <code>checkout</code> or <code>push</code>, so the UI and use cases have nothing to call.</li>
+        <li><strong>Command allowlist, enforced at run time.</strong> Every Git invocation goes through <code>ReadOnlyGit</code>, which accepts only an explicit set of read-only subcommands and flags and throws <code>ReadOnlyViolation</code> for anything else. A unit test fails the build if the allowlist grows without review.</li>
+        <li><strong>No lock or index writes.</strong> Every call runs with <code>--no-optional-locks</code> and <code>GIT_OPTIONAL_LOCKS=0</code>, so even status-like reads do not refresh <code>.git/index</code>.</li>
+        <li><strong>No repository-controlled execution.</strong> The wrapper passes <code>-c core.fsmonitor=false -c core.hooksPath=&lt;empty dir&gt; -c protocol.file.allow=never</code> and uses <code>--no-ext-diff --no-textconv</code>. Opening an untrusted repository therefore runs no code from that repository.</li>
+        <li><strong>Remote mode clones into an app-owned cache.</strong> Remote URLs are mirrored into the app's cache directory (<code>clone --mirror --filter=blob:none</code>, later <code>fetch</code>). The mirror's <code>remote.origin.pushurl</code> is set to an invalid value, so a push would fail even if one were attempted. The user's own clones are never fetched into. They are read as they are.</li>
+        <li><strong>Least-privilege tokens (v2).</strong> Hosted adapters ask only for read scopes (GitHub "Contents: read-only", GitLab <code>read_repository</code>, Azure DevOps "Code (Read)", Bitbucket <code>repository:read</code>). An HTTP interceptor rejects every method except <code>GET</code> and <code>HEAD</code>.</li>
+        <li><strong>The working tree is read, never written.</strong> Working-tree files are opened read-only with <code>File.readAsBytes</code>. The app has no file-writing code path into the repository folder.</li>
+      </ol>
+<pre><code><span class="k">final class</span> ReadOnlyGit {
+  ReadOnlyGit(<span class="k">this</span>.repoDir, {<span class="k">required this</span>.gitExe});
+
+  <span class="k">static const</span> _allowed = {
+    <span class="s">'rev-parse'</span>, <span class="s">'for-each-ref'</span>, <span class="s">'log'</span>, <span class="s">'rev-list'</span>, <span class="s">'merge-base'</span>,
+    <span class="s">'diff-tree'</span>, <span class="s">'ls-tree'</span>, <span class="s">'cat-file'</span>, <span class="s">'show'</span>, <span class="s">'status'</span>,
+  };
+  <span class="k">static const</span> _hardening = [
+    <span class="s">'--no-optional-locks'</span>,
+    <span class="s">'-c'</span>, <span class="s">'core.fsmonitor=false'</span>,
+    <span class="s">'-c'</span>, <span class="s">'core.hooksPath=/nonexistent'</span>,
+    <span class="s">'-c'</span>, <span class="s">'protocol.file.allow=never'</span>,
+  ];
+
+  <span class="k">Future</span>&lt;ProcessResult&gt; run(<span class="k">String</span> sub, <span class="k">List</span>&lt;<span class="k">String</span>&gt; args) {
+    <span class="k">if</span> (!_allowed.contains(sub)) <span class="k">throw</span> ReadOnlyViolation(sub);
+    <span class="k">return</span> Process.run(gitExe, [..._hardening, sub, ...args],
+        workingDirectory: repoDir,
+        environment: {<span class="s">'GIT_OPTIONAL_LOCKS'</span>: <span class="s">'0'</span>, <span class="s">'GIT_TERMINAL_PROMPT'</span>: <span class="s">'0'</span>});
+  }
+}</code></pre>
+    </section>
+
+    <!-- 8 -->
+    <section id="source">
+      <h2>Repository access layer</h2>
+      <p>The domain defines one read-only port. Every adapter implements it, so the UI cannot tell a local clone from GitHub.</p>
+<pre><code><span class="k">abstract interface class</span> RepositorySource {
+  <span class="k">Future</span>&lt;RepoInfo&gt; info();
+  <span class="k">Future</span>&lt;<span class="k">List</span>&lt;RefInfo&gt;&gt; refs();                                   <span class="c">// branches + tags</span>
+  <span class="k">Future</span>&lt;<span class="k">List</span>&lt;CommitInfo&gt;&gt; log({Rev? from, <span class="k">String</span>? path, <span class="k">int</span> limit = 200});
+  <span class="k">Future</span>&lt;<span class="k">List</span>&lt;ChangedPath&gt;&gt; changedPaths(Rev base, Rev compare);  <span class="c">// incl. renames</span>
+  <span class="k">Future</span>&lt;BlobRef?&gt; resolve(Rev rev, <span class="k">String</span> path);                 <span class="c">// path → blob SHA</span>
+  <span class="k">Future</span>&lt;Uint8List&gt; readBlob(BlobRef blob);
+}
+
+<span class="k">sealed class</span> Rev {}
+<span class="k">final class</span> CommitRev <span class="k">extends</span> Rev { <span class="k">final String</span> sha; ... }
+<span class="k">final class</span> RefRev    <span class="k">extends</span> Rev { <span class="k">final String</span> name; ... }   <span class="c">// resolved to a SHA once, then pinned</span>
+<span class="k">final class</span> WorkingTreeRev <span class="k">extends</span> Rev {}                       <span class="c">// local source only</span></code></pre>
+      <h3>Adapters</h3>
+      <div class="table-wrap"><table>
+        <tr><th>Adapter</th><th>Backed by</th><th>Notes</th></tr>
+        <tr><td><code>GitCliSource</code></td><td><code>ReadOnlyGit</code></td>
+          <td><code>changedPaths</code> runs <code>diff-tree -r -M --name-status --no-ext-diff</code>. <code>readBlob</code> goes through one long-lived <code>cat-file --batch</code> process, which avoids starting a process per file.</td></tr>
+        <tr><td><code>MirrorCache</code></td><td>app cache dir</td><td>Wraps <code>GitCliSource</code>. Owns its clone's lifecycle (<code>clone --mirror</code>, <code>fetch --prune</code> on demand), and asserts that the target path is inside the cache directory.</td></tr>
+        <tr><td><code>WorkingTreeReader</code></td><td><code>dart:io</code></td><td>Serves <code>WorkingTreeRev</code>. Changed paths come from <code>status --porcelain=v2</code> with optional locks disabled.</td></tr>
+        <tr><td><code>GitHubSource</code> and similar (v2)</td><td>REST APIs</td><td>Compare endpoints for changed paths, the blob/contents endpoints for files. Only <code>GET</code> is allowed.</td></tr>
+      </table></div>
+      <p>
+        <strong>Git discovery:</strong> on startup the app finds <code>git</code> on the <code>PATH</code> (or uses a path from settings) and checks for a minimum
+        version. If Git is missing, the app explains how to install it instead of failing silently.
+      </p>
+    </section>
+
+    <!-- 9 -->
+    <section id="model">
+      <h2>Matillion object model &amp; normalization</h2>
+      <p>
+        Parsing turns raw JSON into a <strong>normalized model</strong>: slot maps become ordered lists keyed by meaningful names,
+        IDs resolve to components, and cosmetic data is kept apart from semantic data. Every later step works on this model.
+      </p>
+      <svg class="diagram" viewBox="0 0 820 130" role="img" aria-label="Pipeline: raw bytes, parse, normalize, normalized job, then diff and print.">
+        <rect class="box" x="10" y="35" width="120" height="56" rx="8"/><text class="title" x="70" y="60" text-anchor="middle">Raw bytes</text><text class="small" x="70" y="78" text-anchor="middle">blob SHA</text>
+        <rect class="box" x="175" y="35" width="120" height="56" rx="8"/><text class="title" x="235" y="60" text-anchor="middle">Detect</text><text class="small" x="235" y="78" text-anchor="middle">ObjectAdapter</text>
+        <rect class="box" x="340" y="35" width="120" height="56" rx="8"/><text class="title" x="400" y="60" text-anchor="middle">Normalize</text><text class="small" x="400" y="78" text-anchor="middle">slots → names</text>
+        <rect class="box hl" x="505" y="35" width="130" height="56" rx="8"/><text class="title" x="570" y="60" text-anchor="middle">MJob</text><text class="small" x="570" y="78" text-anchor="middle">cached by SHA</text>
+        <rect class="box" x="685" y="5" width="125" height="48" rx="8"/><text class="title" x="747" y="34" text-anchor="middle">Differ</text>
+        <rect class="box" x="685" y="75" width="125" height="48" rx="8"/><text class="title" x="747" y="104" text-anchor="middle">JSON printer</text>
+        <path class="edge" d="M130,63 L173,63" marker-end="url(#ah)"/>
+        <path class="edge" d="M295,63 L338,63" marker-end="url(#ah)"/>
+        <path class="edge" d="M460,63 L503,63" marker-end="url(#ah)"/>
+        <path class="edge" d="M635,55 L683,32" marker-end="url(#ah)"/>
+        <path class="edge" d="M635,72 L683,96" marker-end="url(#ah)"/>
+      </svg>
+<pre><code><span class="k">final class</span> MJob {
+  <span class="k">final String</span> name;
+  <span class="k">final</span> JobType type;                        <span class="c">// orchestration | transformation</span>
+  <span class="k">final String</span>? description;
+  <span class="k">final</span> Map&lt;ComponentId, MComponent&gt; components;
+  <span class="k">final List</span>&lt;MConnector&gt; connectors;
+  <span class="k">final List</span>&lt;MVariable&gt; variables;           <span class="c">// job variables</span>
+  <span class="k">final List</span>&lt;MGridVariable&gt; grids;           <span class="c">// grid variables</span>
+  <span class="k">final List</span>&lt;MNote&gt; notes;
+}
+
+<span class="k">final class</span> MComponent {
+  <span class="k">final</span> ComponentId id;
+  <span class="k">final</span> ComponentType type;                   <span class="c">// resolved from implementationID via the variant registry</span>
+  <span class="k">final String</span> name;                         <span class="c">// lifted out of the "Name" parameter</span>
+  <span class="k">final List</span>&lt;MParameter&gt; parameters;         <span class="c">// ordered by slot, keyed by name</span>
+  <span class="k">final</span> Layout layout;                        <span class="c">// x, y, w, h: cosmetic</span>
+}
+
+<span class="k">final class</span> MParameter { <span class="k">final int</span> slot; <span class="k">final String</span> name; <span class="k">final</span> MValue value; }
+
+<span class="k">sealed class</span> MValue {}
+<span class="k">final class</span> MScalar <span class="k">extends</span> MValue { <span class="k">final String</span> type; <span class="k">final String</span> value; }  <span class="c">// STRING, INTEGER, …</span>
+<span class="k">final class</span> MText   <span class="k">extends</span> MValue { <span class="k">final String</span> text; <span class="k">final</span> Language lang; } <span class="c">// SQL / Python / Bash</span>
+<span class="k">final class</span> MList   <span class="k">extends</span> MValue { <span class="k">final List</span>&lt;MScalar&gt; items; }
+<span class="k">final class</span> MGrid   <span class="k">extends</span> MValue { <span class="k">final List</span>&lt;<span class="k">String</span>&gt; columns; <span class="k">final List</span>&lt;<span class="k">List</span>&lt;MScalar&gt;&gt; rows; }
+
+<span class="k">final class</span> MConnector {
+  <span class="k">final</span> ConnectorKind kind;                  <span class="c">// success | failure | unconditional | true | false | iteration</span>
+  <span class="k">final</span> ComponentId source, target;
+}</code></pre>
+      <h3>Normalization rules</h3>
+      <ul>
+        <li><strong>Slots to structure.</strong> <code>parameters[slot].elements[row].values[col]</code> becomes a scalar, a list or a grid, based on the shape and on a hint from the component type registry.</li>
+        <li><strong>Component type registry.</strong> Resolves <code>implementationID</code> to a type name, a category and diff hints. See <a href="#registry">below</a>.</li>
+        <li><strong>Language detection.</strong> A parameter becomes <code>MText</code> if the registry says so, or as a fallback if it contains newlines and is longer than about 80 characters.</li>
+        <li><strong>Edge model.</strong> The six connector maps merge into one edge list with a <code>kind</code>. The per-component <code>*ConnectorIDs</code> arrays are dropped because they are derived data.</li>
+        <li><strong>Stable ordering.</strong> Components are ordered by component ID, so a rename never moves a component. Parameters are ordered by slot, and variables and grid variables by name. Printing is therefore deterministic, which makes <code>CanonicalJsonPrinter</code> output safe to line-diff.</li>
+        <li><strong>Lossless escape hatch.</strong> Every model node keeps a pointer to its raw JSON subtree, so the "raw" view can show exactly what the file says.</li>
+      </ul>
+
+      <h3 id="registry">Component type registry</h3>
+      <p>
+        The registry is seeded from <code>.docs/implementation_id_to_type.json</code>, which maps 65 <code>implementationID</code> values to type names
+        (all IDs and all names are unique). This map is shared by all Matillion ETL variants. Not every type in it exists on every variant,
+        and some do not exist on Synapse. Which types a variant offers is defined by its <a href="#variants">variant profile</a>. The IDs are signed 32-bit integers stored as string keys, such as <code>"-741198691": "Database Query"</code>.
+        The parser reads <code>implementationID</code> as a JSON number and looks it up by its decimal string.
+      </p>
+      <p>
+        The file contains names only, so the registry has two assets. The ID map is kept exactly as provided, so it can be replaced or regenerated
+        from new exports without touching anything else. Presentation and diff hints live in a second, hand-maintained file that is keyed by type name:
+      </p>
+<pre><code><span class="c">// assets/registry/implementation_id_to_type.json : as provided (ID → type name)</span>
+{ <span class="s">"444132438"</span>: <span class="s">"Start"</span>, <span class="s">"-741198691"</span>: <span class="s">"Database Query"</span>, <span class="s">"-798585337"</span>: <span class="s">"SQL Script"</span>, ... }
+
+<span class="c">// assets/registry/component_meta.json : hand-maintained (type name → category + hints)</span>
+<span class="c">// Parameter names below are illustrative and must be confirmed against real exports.</span>
+{
+  <span class="s">"Database Query"</span>: { <span class="s">"category"</span>: <span class="s">"read"</span>,   <span class="s">"code"</span>: { <span class="s">"SQL Query"</span>: <span class="s">"sql"</span> } },
+  <span class="s">"SQL Script"</span>:     { <span class="s">"category"</span>: <span class="s">"script"</span>, <span class="s">"code"</span>: { <span class="s">"SQL Script"</span>: <span class="s">"sql"</span> } },
+  <span class="s">"Python Script"</span>:  { <span class="s">"category"</span>: <span class="s">"script"</span>, <span class="s">"code"</span>: { <span class="s">"Script"</span>: <span class="s">"python"</span> } },
+  <span class="s">"Calculator"</span>:     { <span class="s">"category"</span>: <span class="s">"transform"</span>, <span class="s">"grids"</span>: { <span class="s">"Calculations"</span>: { <span class="s">"key"</span>: <span class="s">"Name"</span> } } }
+}</code></pre>
+      <p>Proposed categories, which follow the palette order of the ID map. They drive the colour strip on the canvas and the component-type filter:</p>
+      <div class="table-wrap"><table>
+        <tr><th>Category</th><th>Types from <code>implementation_id_to_type.json</code></th><th>#</th></tr>
+        <tr><td>Flow</td><td>Start, End Success, End Failure, If, And, Or, Retry, Run Orchestration, Run Transformation</td><td>9</td></tr>
+        <tr><td>Iterate</td><td>File Iterator, Fixed Iterator, Grid Iterator, Loop Iterator</td><td>4</td></tr>
+        <tr><td>Read</td><td>Data Transfer, API Query, Database Query, Excel Query, Jira Query, SAP NetWeaver Query, SharePoint Query, Table Input, Multi Table Input, Fixed Flow, Generate Sequence</td><td>11</td></tr>
+        <tr><td>Transform</td><td>Join, Unite, Except, Intersect, Aggregate, Calculator, Convert Type, Detect Changes, Distinct, Filter, First/Last, Lead/Lag, Map Values, Pivot, Rank, Rename, Replicate, SQL, Split Field, Transpose Rows, Unpivot, Window Calculation</td><td>22</td></tr>
+        <tr><td>Write &amp; DDL</td><td>Table Output, Table Update, Rewrite Table, Create View, Create Table, Create External Table, Truncate Tables, Delete Tables</td><td>8</td></tr>
+        <tr><td>Script</td><td>SQL Script, Python Script, Bash Script</td><td>3</td></tr>
+        <tr><td>Variables &amp; checks</td><td>Query Result To Scalar, Query Result To Grid, Table Metadata To Grid, JDBC Table Metadata To Grid, Append To Grid, Remove From Grid, Assert Table, Assert View</td><td>8</td></tr>
+      </table></div>
+      <p>
+        Unknown IDs render as <em>"Component #&lt;id&gt;"</em> in a neutral category and still diff correctly, because diffing relies on parameter names, not on the registry.
+        The app lists every unknown ID it finds in the opened repository, with an example job, so the map can be extended.
+        A unit test checks that every type name in <code>component_meta.json</code> exists in the ID map, and the reverse.
+      </p>
+    </section>
+
+    <!-- 9b -->
+    <section id="variants">
+      <h2>Matillion ETL variants</h2>
+      <p>
+        Matillion ETL ships as separate products per target platform. The first release supports <strong>Matillion ETL for Azure Synapse</strong> only.
+        The design assumes the job JSON structure is the same across variants (to be confirmed with a sample export from a second variant later).
+        What differs is captured in a <strong>variant profile</strong>:
+      </p>
+      <div class="table-wrap"><table>
+        <tr><th>What differs</th><th>Where it lives</th><th>Used by</th></tr>
+        <tr><td>Which component types exist</td><td><code>components</code>: the IDs from the shared map that the variant offers</td><td>"Not available on Synapse" warnings, component-type filter</td></tr>
+        <tr><td>Types that exist only on one variant</td><td><code>extraTypes</code>: additional ID → name entries</td><td>Type name resolution</td></tr>
+        <tr><td>Parameters of a type. The same type can have different parameters on different platforms.</td><td><code>meta</code>: overrides of <code>component_meta.json</code></td><td>Code and grid detection during normalization</td></tr>
+        <tr><td>SQL dialect</td><td><code>sqlDialect</code> (<code>tsql</code> for Synapse)</td><td>Syntax highlighting of SQL parameters</td></tr>
+      </table></div>
+<pre><code><span class="c">// assets/registry/variants/synapse.json</span>
+{
+  <span class="s">"id"</span>: <span class="s">"synapse"</span>,
+  <span class="s">"displayName"</span>: <span class="s">"Matillion ETL for Azure Synapse"</span>,
+  <span class="s">"sqlDialect"</span>: <span class="s">"tsql"</span>,
+  <span class="s">"components"</span>: [<span class="s">"444132438"</span>, <span class="s">"-741198691"</span>, <span class="s">"-798585337"</span>, ...],  <span class="c">// IDs from the shared map that exist on Synapse (list to be confirmed)</span>
+  <span class="s">"extraTypes"</span>: {},                                              <span class="c">// IDs that exist only on Synapse</span>
+  <span class="s">"meta"</span>: {}                                                     <span class="c">// Synapse-specific overrides of component_meta.json</span>
+}</code></pre>
+<pre><code><span class="k">final class</span> VariantProfile {
+  <span class="k">final String</span> id;                          <span class="c">// "synapse"</span>
+  <span class="k">final String</span> displayName;
+  <span class="k">final</span> SqlDialect sqlDialect;               <span class="c">// tsql</span>
+  <span class="k">final</span> Set&lt;<span class="k">int</span>&gt; components;               <span class="c">// available implementationIDs</span>
+  <span class="k">final</span> Map&lt;<span class="k">int</span>, <span class="k">String</span>&gt; extraTypes;
+  <span class="k">final</span> Map&lt;<span class="k">String</span>, ComponentMeta&gt; meta;
+}
+
+<span class="k">final class</span> ComponentRegistry {
+  ComponentRegistry({<span class="k">required</span> SharedRegistry shared, <span class="k">required</span> VariantProfile variant});
+
+  <span class="c">// name:  variant.extraTypes → shared ID map → "Component #&lt;id&gt;"</span>
+  <span class="c">// meta:  variant.meta → component_meta.json → generic defaults</span>
+  ComponentType resolve(<span class="k">int</span> implementationId);
+}
+
+<span class="k">enum</span> Availability { available, notInVariant, unknown }   <span class="c">// carried on ComponentType</span></code></pre>
+      <h3>Choosing the variant</h3>
+      <ul>
+        <li>The variant is chosen per repository when the repository is opened, and stored in app-local settings, never in the repository. In the first release, Synapse is the only option and is preselected.</li>
+        <li>Automatic detection is only added if the exported JSON turns out to contain a reliable marker for the variant. This is an open question for the sample repository.</li>
+        <li>Each parsed job is cached under <code>(blob SHA, variant id)</code>, because the variant affects normalization (code and grid hints).</li>
+      </ul>
+      <h3>Behaviour for components outside the variant</h3>
+      <p>
+        If a job contains a type that is in the shared map but not in the Synapse profile, the component is shown with its name and a
+        <em>"not available on Synapse"</em> warning. This usually means the job was copied from another variant. Diffing is unaffected.
+        IDs that are in no map at all are handled as unknown types (see <a href="#registry">Component type registry</a>).
+      </p>
+      <h3>Adding a variant later</h3>
+      <ol>
+        <li>Add <code>assets/registry/variants/&lt;variant&gt;.json</code>, listing its components and any extra types or parameter overrides.</li>
+        <li>Add a fixture set exported from that variant under <code>test/fixtures/&lt;variant&gt;/</code>.</li>
+        <li>Add syntax highlighting for its SQL dialect if it is new.</li>
+        <li>Run the registry consistency tests. No changes are needed in the parser, the diff engine or the UI.</li>
+      </ol>
+    </section>
+
+    <!-- 10 -->
+    <section id="diff">
+      <h2>Semantic diff engine</h2>
+      <p>The <code>matillion_diff</code> package takes two <code>MJob</code> values and returns a <code>JobDiff</code> tree. It runs in three stages.</p>
+      <h3>1 · Match</h3>
+      <p>The matcher pairs components across the two versions:</p>
+      <ol>
+        <li><strong>By ID.</strong> Matillion keeps component IDs stable while a component exists, so this resolves most components.</li>
+        <li><strong>By type and name</strong> for the components left over. This catches delete-and-recreate.</li>
+        <li><strong>By similarity</strong> for what is still left: same type, and a parameter-overlap score above a threshold. This catches copy-paste-and-rename.</li>
+      </ol>
+      <p>Connectors are matched on <code>(kind, matched source, matched target)</code>, never on connector ID, so ID churn alone produces no diff.</p>
+      <h3>2 · Compare</h3>
+      <ul>
+        <li>Parameters are compared by name. Scalars use equality. <code>MText</code> gets a line diff (Myers, with word-level highlighting within changed lines).</li>
+        <li>Grids are compared row by row. Rows are matched on a key column from the registry (for example the target column name) and otherwise by LCS over whole rows. Cells are then compared within each matched row.</li>
+        <li>Variables and grid variables are matched by name. Notes are matched by ID first, then by text similarity.</li>
+      </ul>
+      <h3>3 · Classify</h3>
+      <div class="table-wrap"><table>
+        <tr><th>Kind</th><th>Glyph</th><th>Meaning</th><th>Shown by default</th></tr>
+        <tr><td><span class="tag t-add">added</span></td><td class="g-add">+</td><td>Only in compare</td><td>yes</td></tr>
+        <tr><td><span class="tag t-del">removed</span></td><td class="g-del">−</td><td>Only in base</td><td>yes</td></tr>
+        <tr><td><span class="tag t-mod">modified</span></td><td class="g-mod">~</td><td>Semantic content changed</td><td>yes</td></tr>
+        <tr><td><span class="tag t-ren">renamed</span></td><td style="color:var(--ren);font-weight:700">→</td><td>Same component, new name. Can be combined with modified.</td><td>yes</td></tr>
+        <tr><td><span class="tag t-mod">rewired</span></td><td class="g-mod">⇄</td><td>A component's incoming or outgoing connectors changed</td><td>yes</td></tr>
+        <tr><td><span class="tag t-lay">layout</span></td><td class="g-lay">↔</td><td>Only position, size or note colour changed</td><td>no (toggle)</td></tr>
+      </table></div>
+<pre><code><span class="k">final class</span> JobDiff {
+  <span class="k">final</span> ObjectKey key;                    <span class="c">// path + object type</span>
+  <span class="k">final</span> ChangeKind kind;                  <span class="c">// added | removed | modified | layoutOnly | unchanged</span>
+  <span class="k">final List</span>&lt;FieldChange&gt; info;           <span class="c">// name, description, type</span>
+  <span class="k">final List</span>&lt;ComponentDiff&gt; components;
+  <span class="k">final List</span>&lt;ConnectorDiff&gt; connectors;
+  <span class="k">final List</span>&lt;VariableDiff&gt; variables;
+  <span class="k">final List</span>&lt;NoteDiff&gt; notes;
+  DiffStats <span class="k">get</span> stats;                    <span class="c">// counts for badges</span>
+}
+
+<span class="k">final class</span> ComponentDiff {
+  <span class="k">final</span> MComponent? base, compare;        <span class="c">// null on one side for added/removed</span>
+  <span class="k">final</span> Set&lt;ChangeKind&gt; kinds;            <span class="c">// e.g. {renamed, modified, layoutOnly}</span>
+  <span class="k">final List</span>&lt;ParameterDiff&gt; parameters;
+  <span class="k">final</span> MatchReason matchedBy;            <span class="c">// id | typeAndName | similarity: shown in UI</span>
+}
+
+<span class="k">sealed class</span> ValueDiff {}
+<span class="k">final class</span> ScalarDiff <span class="k">extends</span> ValueDiff { <span class="k">final</span> MScalar? before, after; }
+<span class="k">final class</span> TextDiff   <span class="k">extends</span> ValueDiff { <span class="k">final List</span>&lt;Hunk&gt; hunks; <span class="k">final</span> Language lang; }
+<span class="k">final class</span> GridDiff   <span class="k">extends</span> ValueDiff { <span class="k">final List</span>&lt;RowDiff&gt; rows; }</code></pre>
+      <div class="callout">
+        <strong>Byproduct: a canonical JSON projection.</strong>
+        <code>CanonicalJsonPrinter</code> writes an <code>MJob</code> back out as JSON, but in a form that line diffs handle well.
+        Slot maps become named keys, components and connectors are referenced by name instead of ID, layout and derived ID arrays are dropped,
+        multi-line SQL becomes an array of lines, and the ordering is stable. The app uses it for the "JSON" view.
+        In v2 the same printer can ship as a CLI <code>git textconv</code> driver, so that plain <code>git diff</code>, pull request diffs and other tools also become readable.
+      </div>
+<pre><code>{
+  <span class="s">"job"</span>: <span class="s">"daily_load"</span>,
+  <span class="s">"type"</span>: <span class="s">"ORCHESTRATION"</span>,
+  <span class="s">"components"</span>: {
+    <span class="s">"Load Orders (EU)"</span>: {
+      <span class="s">"type"</span>: <span class="s">"Database Query"</span>,
+      <span class="s">"SQL Query"</span>: [<span class="s">"SELECT *"</span>, <span class="s">"FROM orders"</span>, <span class="s">"WHERE region = 'EU'"</span>]
+    }
+  },
+  <span class="s">"connectors"</span>: [<span class="s">"Load Orders (EU) -failure-&gt; Log Failure"</span>]
+}</code></pre>
+    </section>
+
+    <!-- 11 -->
+    <section id="presentation">
+      <h2>Presentation &amp; state</h2>
+      <h3>Riverpod provider graph</h3>
+<pre><code>repositorySourceProvider          <span class="c">// the opened RepositorySource (overridable in tests)</span>
+  └─ refsProvider                   <span class="c">// branches / tags</span>
+compareSelectionProvider          <span class="c">// (base Rev, compare Rev), StateNotifier, synced to the route</span>
+  └─ changedObjectsProvider         <span class="c">// AsyncValue&lt;List&lt;ChangedObject&gt;&gt; with kind and stats</span>
+       └─ objectDiffProvider.family(ObjectKey)   <span class="c">// AsyncValue&lt;JobDiff&gt;, computed in an isolate</span>
+            └─ selectionProvider     <span class="c">// focused component / parameter (shared by all views)</span>
+viewFilterProvider                <span class="c">// hide layout, kinds, component types, search text</span>
+historyProvider.family(path)      <span class="c">// commits touching a path</span></code></pre>
+      <p>
+        Every view (Summary, Structure tree, Canvas, JSON, Raw) reads the same <code>JobDiff</code> and the same <code>selectionProvider</code>.
+        Selecting a component on the canvas therefore highlights it in the tree and scrolls the JSON view to it.
+      </p>
+      <h3>Views</h3>
+      <div class="table-wrap"><table>
+        <tr><th>View</th><th>Purpose</th><th>Rendering</th></tr>
+        <tr><td>Summary</td><td>Readable change list ("Renamed Load Orders → Load Orders (EU)")</td><td><code>ListView</code> of change cards</td></tr>
+        <tr><td>Structure</td><td>Component → parameter tree, base and compare columns</td><td>Lazy tree (<code>TreeSliver</code>)</td></tr>
+        <tr><td>Canvas</td><td>Job graph with change overlay: side-by-side, overlay, before, after</td><td><code>InteractiveViewer</code> + <code>CustomPainter</code>, hit-testing for selection</td></tr>
+        <tr><td>JSON</td><td>Line diff of the canonical JSON projection</td><td>Virtualized two-column text diff</td></tr>
+        <tr><td>Raw</td><td>Key-sorted raw JSON, for when you need to see exactly what the file says</td><td>Collapsible JSON tree</td></tr>
+        <tr><td>History</td><td>Commits touching one object, plus a per-component change matrix</td><td>Timeline and matrix grid</td></tr>
+      </table></div>
+      <p>The concrete layouts are explored in <a href="ui-design.html">ui-design.html</a>.</p>
+    </section>
+
+    <!-- 12 -->
+    <section id="flow">
+      <h2>Data flow: opening a job diff</h2>
+      <svg class="diagram" viewBox="0 0 820 330" role="img" aria-label="Sequence: UI selects job; use case resolves blobs, checks cache, reads both blobs in parallel, runs parse, normalize and diff in an isolate, returns JobDiff to the UI.">
+        <text class="title" x="70"  y="22" text-anchor="middle">UI</text>
+        <text class="title" x="250" y="22" text-anchor="middle">LoadObjectDiff</text>
+        <text class="title" x="430" y="22" text-anchor="middle">DiffCache</text>
+        <text class="title" x="590" y="22" text-anchor="middle">RepositorySource</text>
+        <text class="title" x="750" y="22" text-anchor="middle">Isolate</text>
+        <path class="lane" d="M70,32 V320 M250,32 V320 M430,32 V320 M590,32 V320 M750,32 V320"/>
+
+        <path class="edge" d="M70,55 H248" marker-end="url(#ah)"/><text class="small" x="78" y="49">select job (ObjectKey)</text>
+        <path class="edge" d="M250,85 H588" marker-end="url(#ah)"/><text class="small" x="258" y="79">resolve(base, path), resolve(compare, path)</text>
+        <path class="edge" d="M590,110 H252" marker-end="url(#ah)" style="stroke-dasharray:4 3"/><text class="small" x="400" y="104">blob SHAs</text>
+        <path class="edge" d="M250,140 H428" marker-end="url(#ah)"/><text class="small" x="258" y="134">get(shaA, shaB)?</text>
+        <path class="edge" d="M430,165 H252" marker-end="url(#ah)" style="stroke-dasharray:4 3"/><text class="small" x="300" y="159">miss</text>
+        <path class="edge" d="M250,195 H588" marker-end="url(#ah)"/><text class="small" x="258" y="189">readBlob(A) ∥ readBlob(B)</text>
+        <path class="edge" d="M250,225 H748" marker-end="url(#ah)"/><text class="small" x="440" y="219">Isolate.run(parse → normalize → diff)</text>
+        <path class="edge" d="M750,250 H252" marker-end="url(#ah)" style="stroke-dasharray:4 3"/><text class="small" x="440" y="244">JobDiff</text>
+        <path class="edge" d="M250,275 H428" marker-end="url(#ah)"/><text class="small" x="258" y="269">put</text>
+        <path class="edge" d="M250,305 H72" marker-end="url(#ah)" style="stroke-dasharray:4 3"/><text class="small" x="90" y="299">AsyncValue.data</text>
+      </svg>
+      <p>
+        Revisions are resolved to commit SHAs once, when the user picks them. From then on every read is content-addressed,
+        so cache entries never go stale and a moving branch never shows a half-updated state.
+      </p>
+    </section>
+
+    <!-- 13 -->
+    <section id="perf">
+      <h2>Performance &amp; caching</h2>
+      <ul>
+        <li><strong>Content-addressed caches.</strong> Parsed <code>MJob</code> values are cached by blob SHA and <code>JobDiff</code> values by <code>(shaA, shaB)</code>, both in an in-memory LRU. Git blobs never change, so nothing needs invalidating.</li>
+        <li><strong>Isolates.</strong> Parsing, normalizing and diffing run in <code>Isolate.run</code>. Large repositories are pre-scanned for the changed-objects list with a bounded pool of about four concurrent isolates.</li>
+        <li><strong>Batch blob reads.</strong> One persistent <code>git cat-file --batch</code> process per repository streams blobs without per-file process start-up (which is slow on Windows).</li>
+        <li><strong>Cheap list stats.</strong> The changed-objects list first shows Git's name-status. Semantic badge counts fill in progressively as each diff finishes, and objects whose only changes are layout get a grey badge.</li>
+        <li><strong>Virtualized rendering.</strong> Trees and text views use slivers. The canvas paints only what is visible and caches component glyphs with <code>Picture</code>.</li>
+      </ul>
+    </section>
+
+    <!-- 14 -->
+    <section id="structure">
+      <h2>Project structure</h2>
+<pre><code>matillion_diff/                       <span class="c">// pub workspace root</span>
+├─ pubspec.yaml                       <span class="c">// workspace: [packages/*, app]</span>
+├─ packages/
+│  ├─ matillion_model/                <span class="c">// pure Dart: detect, parse, normalize, registry, printer</span>
+│  │  ├─ lib/src/adapters/            <span class="c">// job_adapter.dart, generic_json_adapter.dart, …</span>
+│  │  ├─ lib/src/registry/            <span class="c">// registry loader</span>
+│  │  ├─ assets/registry/             <span class="c">// implementation_id_to_type.json, component_meta.json</span>
+│  │  │  └─ variants/                 <span class="c">// synapse.json (MVP), one profile per Matillion ETL variant</span>
+│  │  └─ test/fixtures/&lt;variant&gt;/     <span class="c">// real (anonymized) Matillion ETL exports, per variant</span>
+│  ├─ matillion_diff/                 <span class="c">// pure Dart: matcher, differ, classifier, text diff</span>
+│  ├─ repo_source/                    <span class="c">// port + GitCliSource, MirrorCache, WorkingTreeReader</span>
+│  └─ repo_source_hosted/             <span class="c">// v2: GitHub / GitLab / Azure DevOps / Bitbucket (web-safe)</span>
+├─ tools/
+│  └─ mdiff_cli/                      <span class="c">// v2: `mdiff a.json b.json`, textconv driver</span>
+└─ app/                               <span class="c">// Flutter</span>
+   └─ lib/
+      ├─ main.dart
+      ├─ app/                         <span class="c">// router, theme (diff colour tokens), shortcuts</span>
+      ├─ features/
+      │  ├─ repository/               <span class="c">// open repo, recent repos, ref picker</span>
+      │  ├─ compare/                  <span class="c">// compare bar, changed objects tree, filters</span>
+      │  ├─ object_diff/              <span class="c">// summary, structure, canvas, JSON, raw views</span>
+      │  └─ history/                  <span class="c">// timeline, change matrix</span>
+      └─ shared/                      <span class="c">// split panes, diff badges, code view</span></code></pre>
+    </section>
+
+    <!-- 15 -->
+    <section id="errors">
+      <h2>Error handling</h2>
+      <div class="table-wrap"><table>
+        <tr><th>Situation</th><th>Behaviour</th></tr>
+        <tr><td>Git not installed or too old</td><td>Blocking onboarding screen with install instructions. No partial functionality.</td></tr>
+        <tr><td>Invalid JSON in one revision</td><td>That side falls back to a plain text diff, with a banner saying "Could not parse base revision: line 412, unexpected token".</td></tr>
+        <tr><td>Unknown object kind</td><td>Generic key-sorted JSON tree diff.</td></tr>
+        <tr><td>Unknown component type</td><td>Rendered as a generic component. Diffed normally. Listed in Settings → "Unknown component types" so the registry can be extended.</td></tr>
+        <tr><td>Component type not available in the selected variant</td><td>Shown with its name and a "not available on Synapse" warning. Diffed normally.</td></tr>
+        <tr><td>Very large file (&gt; 20 MB)</td><td>Asks for confirmation before parsing.</td></tr>
+        <tr><td>Auth failure on mirror fetch</td><td>Shows Git's stderr and keeps using the last mirrored state, marked "stale".</td></tr>
+        <tr><td><code>ReadOnlyViolation</code></td><td>Treated as a bug: logged, an error dialog is shown, and nothing is executed.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 16 -->
+    <section id="testing">
+      <h2>Testing strategy</h2>
+      <ul>
+        <li><strong>Fixture pairs.</strong> <code>test/fixtures/&lt;variant&gt;/&lt;case&gt;/{base,compare}.json</code> plus an <code>expected.txt</code> golden of the diff in printed form. Cases include rename, delete-and-recreate, grid row inserted, SQL edit, layout-only, connector rewire, and ID renumbering with no semantic change (which must produce an empty diff).</li>
+        <li><strong>Registry tests.</strong> Every ID in a variant profile exists in the shared map or in the profile's <code>extraTypes</code>. Every <code>meta</code> override names a type the variant offers.</li>
+        <li><strong>Property tests.</strong> <code>diff(x, x)</code> is empty. <code>diff(a, b)</code> mirrors <code>diff(b, a)</code>. Shuffling map order or renumbering IDs does not change the result.</li>
+        <li><strong>Read-only tests.</strong> Every <code>RepositorySource</code> method runs against a temporary repository, and afterwards the test asserts that <code>.git</code> is byte-identical (refs, index, objects, config). An allowlist snapshot test fails when a subcommand is added.</li>
+        <li><strong>Widget and golden tests</strong> for badges, tree rows and canvas rendering in light and dark themes.</li>
+        <li><strong>Integration test</strong> on all three desktop platforms in CI against a small sample Matillion ETL for Synapse repository.</li>
+      </ul>
+    </section>
+
+    <!-- 17 -->
+    <section id="roadmap">
+      <h2>Roadmap</h2>
+      <div class="phase"><div class="label">MVP<small>~6–8 weeks</small></div>
+        <ul>
+          <li>Open a local clone and pick refs or commits. Changed-objects list.</li>
+          <li>Job adapter, component type registry seeded with the 65 known types, Synapse variant profile, semantic diff.</li>
+          <li>Summary, Structure, JSON and Raw views. SQL text diff with T-SQL highlighting. Hide-layout filter.</li>
+          <li>Read-only test suite. Windows and macOS builds.</li>
+        </ul></div>
+      <div class="phase"><div class="label">v1<small>+6 weeks</small></div>
+        <ul>
+          <li>Canvas diff (side-by-side and overlay), grid diff, job history and change matrix.</li>
+          <li>Remote URL via mirror cache, working-tree compare, Linux build.</li>
+          <li>Keyboard navigation (next and previous change), deep links.</li>
+        </ul></div>
+      <div class="phase"><div class="label">v2<small>later</small></div>
+        <ul>
+          <li>Hosted-provider sources and a Flutter web build.</li>
+          <li><code>mdiff</code> CLI and textconv driver. Optional HTML report export (written outside the repository).</li>
+          <li>Variant profiles for further Matillion ETL variants (Snowflake, Redshift, BigQuery, Delta Lake on Databricks), each with its own fixtures.</li>
+          <li>Adapters for more object kinds (environments, schedules, shared jobs).</li>
+        </ul></div>
+    </section>
+
+    <!-- 18 -->
+    <section id="risks">
+      <h2>Risks &amp; open questions</h2>
+      <details open><summary>Exact repository format</summary><div>
+        Which files does Matillion's Git integration write, and in which folders? Are there non-job objects (environments, project variables, schedules,
+        API profiles) that need adapters? <em>Action:</em> get an anonymized sample repository before the MVP starts.</div></details>
+      <details><summary>Component type mapping</summary><div>
+        <code>implementationID</code> values are not formally documented. <code>implementation_id_to_type.json</code> now covers 65 types (see <a href="#registry">Component type registry</a>).
+        The map is shared across variants, and some of its types do not exist on Synapse. Still open: exactly which of the 65 types the Synapse profile lists,
+        whether any Synapse-only components are missing from the map, and whether IDs are the same across Matillion ETL versions.
+        <em>Mitigation:</em> generic fallback rendering, plus a list of unknown IDs found in the opened repository, which can be added to the map.</div></details>
+      <details><summary>Variant detection and differences</summary><div>
+        It is not yet known whether exported job JSON says which variant it came from, or how much the parameters of the same component type differ between variants.
+        <em>Action:</em> check the Synapse sample repository for a variant marker. Before the first non-Synapse variant is added, compare the same job exported from two variants.</div></details>
+      <details><summary>Component ID stability</summary><div>
+        Matching assumes that IDs survive edits. If Matillion re-numbers components on import or export, the type-and-name and similarity matchers take over. Fixtures must cover this case.</div></details>
+      <details><summary>Git on users' machines</summary><div>
+        Depending on a system <code>git</code> is the pragmatic choice, but locked-down corporate laptops may not have it. A bundled portable Git for Windows is an option, at the cost of a larger installer.</div></details>
+      <details><summary>Hosted API rate limits (v2)</summary><div>
+        Comparing large branches through REST can hit rate limits. Use the tree and compare endpoints rather than fetching file by file, and reuse the content-addressed cache.</div></details>
+      <details><summary>Canvas fidelity</summary><div>
+        The canvas is a recognisable approximation of Matillion's canvas, not a pixel-perfect clone. Icons for every component type are out of scope at first; components are shown by category colour and initials.</div></details>
+    </section>
+  </main>
+</div>
+
+<script>
+  // Theme toggle (remembers choice; storage may be unavailable)
+  (function () {
+    var root = document.documentElement;
+    try { var t = localStorage.getItem('mdiff-theme'); if (t) root.setAttribute('data-theme', t); } catch (e) {}
+    document.getElementById('themeBtn').addEventListener('click', function () {
+      var dark = root.getAttribute('data-theme') === 'dark' ||
+        (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = dark ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('mdiff-theme', next); } catch (e) {}
+    });
+  })();
+
+  // Scroll-spy for the table of contents
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (l) { l.classList.remove('active'); });
+          var a = map[e.target.id]; if (a) a.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-10% 0px -75% 0px' });
+    document.querySelectorAll('main section[id]').forEach(function (s) { obs.observe(s); });
+  })();
+</script>
+</body>
+</html>
