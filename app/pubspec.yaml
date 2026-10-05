@@ -1,0 +1,40 @@
+name: matillion_diff_app
+description: "Matillion Diff: a read-only visual diff for Matillion ETL repositories (web PoC)."
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  matillion_core:
+    path: ../packages/matillion_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  matillion_git:
+    path: ../packages/matillion_git
+
+flutter:
+  uses-material-design: true
+
+  # Bundled (SIL OFL 1.1, see assets/fonts/OFL-*.txt) so code, JSON and diff
+  # glyphs (→ ↔ ✓ ✗ ⚠ ⇄ ⟳) render offline; CanvasKit has no system fonts.
+  fonts:
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
+    # Glyph-only subsets, used as fallbacks so UI text keeps the default font.
+    - family: MdiffSymbols
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Symbols.ttf
+    - family: MdiffSymbolsMath
+      fonts:
+        - asset: assets/fonts/NotoSansMath-Symbols.ttf

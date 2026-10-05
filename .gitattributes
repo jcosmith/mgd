@@ -1,0 +1,3 @@
+# The fixture repository must stay byte-identical to its own Git history
+# (Matillion writes LF, minified JSON), and its .gitted folder is a Git database.
+test/assets/matillion-repo/** -text

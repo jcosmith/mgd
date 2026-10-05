@@ -1,0 +1,10 @@
+name: matillion_diff_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.9.0
+
+workspace:
+  - packages/matillion_core
+  - packages/matillion_git
+  - app

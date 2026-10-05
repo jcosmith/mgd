@@ -1,0 +1,13 @@
+name: matillion_core
+description: Matillion ETL job model, component registry, semantic diff and read-only repository port. Web-safe (no dart:io).
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  http: ^1.2.0
+
+dev_dependencies:
+  test: ^1.25.0
