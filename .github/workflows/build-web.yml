@@ -4,18 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to create (e.g. v0.1.0); leave empty to only upload a workflow artifact
+        description: Release tag to create (e.g. v0.1.0); leave empty to only upload workflow artifacts
         required: false
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-web:
+  web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: subosito/flutter-action@v2
         with:
@@ -30,25 +30,98 @@ jobs:
         working-directory: app
         run: flutter build web --no-web-resources-cdn
 
-      # upload-artifact zips the directory; the downloaded artifact is the zip.
       - name: Upload web build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: matillion-diff-web-${{ github.sha }}
+          name: web
           path: app/build/web
           if-no-files-found: error
 
-      # Release assets of a public repository download without signing in.
+  # One bundle per platform: the compiled server (dart compile exe only builds
+  # for the platform it runs on) with the web build in web/ next to it.
+  bundle:
+    needs: web
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            exe: matillion-diff.exe
+          - os: ubuntu-latest
+            platform: linux-x64
+            exe: matillion-diff
+          - os: macos-latest
+            platform: macos-arm64
+            exe: matillion-diff
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUNDLE: matillion-diff-${{ inputs.tag || github.sha }}-${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The workspace includes the Flutter app, so resolving it needs Flutter.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.5
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Compile server
+        run: dart compile exe packages/matillion_git/bin/serve.dart -o "dist/$BUNDLE/${{ matrix.exe }}"
+
+      - name: Add web build
+        uses: actions/download-artifact@v8
+        with:
+          name: web
+          path: dist/${{ env.BUNDLE }}/web
+
+      # Zipped here so the executable bit survives on Linux and macOS.
+      - name: Zip bundle
+        working-directory: dist
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            7z a -tzip -bso0 "$BUNDLE.zip" "$BUNDLE"
+          else
+            zip -qry "$BUNDLE.zip" "$BUNDLE"
+          fi
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ env.BUNDLE }}.zip
+          archive: false
+          if-no-files-found: error
+
+  # Release assets of a public repository download without signing in.
+  release:
+    if: inputs.tag != ''
+    needs: bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download bundles
+        uses: actions/download-artifact@v8
+        with:
+          pattern: matillion-diff-*
+          path: dist
+          merge-multiple: true
+
       - name: Publish release
-        if: inputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
         run: |
-          zip_name="matillion-diff-web-$TAG.zip"
-          (cd app/build/web && zip -qr "$GITHUB_WORKSPACE/$zip_name" .)
+          ls -l dist
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" "$zip_name" --clobber
+            gh release upload "$TAG" dist/*.zip --clobber
           else
-            gh release create "$TAG" "$zip_name" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+            gh release create "$TAG" dist/*.zip --target "$GITHUB_SHA" --title "$TAG" --generate-notes
           fi

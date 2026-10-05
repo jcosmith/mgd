@@ -7,6 +7,9 @@
 // Options: --repo <folder>, --port <n> (default 8686), --host <address>
 //          (default 127.0.0.1), --web <folder>, --allow-origin <origin>
 //          (repeatable; for `flutter run` dev servers on another port)
+//
+// Compiled with `dart compile exe`, --web defaults to a `web` folder next to the
+// executable, so a release bundle starts with no options.
 
 import 'dart:io';
 
@@ -35,7 +38,7 @@ Future<void> main(List<String> args) async {
       return;
     }
   }
-  final web = option('web');
+  final web = option('web') ?? _bundledWeb();
   final origins = {
     for (var i = 0; i < args.length - 1; i++)
       if (args[i] == '--allow-origin') args[i + 1],
@@ -49,4 +52,10 @@ Future<void> main(List<String> args) async {
   stdout.writeln('Matillion Diff (read-only) on http://${server.address.host}:${server.port}/'
       '${web == null ? ' (API only)' : ''}'
       '${repo == null ? ' · pick a repository in the app' : ' · default repository: $repo'}');
+}
+
+/// The `web` folder next to the running executable, if there is one.
+String? _bundledWeb() {
+  final web = Directory('${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}web');
+  return web.existsSync() ? web.path : null;
 }

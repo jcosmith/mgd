@@ -20,6 +20,21 @@ Design documents: [`.docs/architecture.html`](.docs/architecture.html) and
 
 ## Run it
 
+### From a release (no Flutter needed)
+
+Requires `git` on the PATH. Download the zip for your platform from the
+[releases](https://github.com/jcosmith/mgd/releases) (`windows-x64`,
+`linux-x64` or `macos-arm64`), unzip it and start `matillion-diff` (`.exe` on
+Windows) in the unzipped folder, then open http://127.0.0.1:8686/. It serves the
+`web` folder next to it; the options below (`--repo`, `--port`, ...) work the same.
+
+Release bundles are built by the manually started *Build web app* workflow:
+run it with a tag (e.g. `gh workflow run build-web.yml -f tag=v0.1.0`) to
+create that release. On macOS, a downloaded executable is quarantined; allow it
+with `xattr -d com.apple.quarantine matillion-diff`.
+
+### From source
+
 Requires Flutter with Dart 3.9+ (tested with Flutter 3.47.5) and `git` on the PATH.
 
 ```sh
