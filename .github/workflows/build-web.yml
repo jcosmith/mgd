@@ -2,6 +2,14 @@ name: Build web app
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create (e.g. v0.1.0); leave empty to only upload a workflow artifact
+        required: false
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
   build-web:
@@ -29,3 +37,18 @@ jobs:
           name: matillion-diff-web-${{ github.sha }}
           path: app/build/web
           if-no-files-found: error
+
+      # Release assets of a public repository download without signing in.
+      - name: Publish release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          zip_name="matillion-diff-web-$TAG.zip"
+          (cd app/build/web && zip -qr "$GITHUB_WORKSPACE/$zip_name" .)
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$zip_name" --clobber
+          else
+            gh release create "$TAG" "$zip_name" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          fi
