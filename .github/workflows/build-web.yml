@@ -1,0 +1,31 @@
+name: Build web app
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.5
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build web
+        working-directory: app
+        run: flutter build web --no-web-resources-cdn
+
+      # upload-artifact zips the directory; the downloaded artifact is the zip.
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: matillion-diff-web-${{ github.sha }}
+          path: app/build/web
+          if-no-files-found: error
