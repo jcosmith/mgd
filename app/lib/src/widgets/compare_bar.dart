@@ -57,6 +57,7 @@ class CompareBar extends StatelessWidget {
               label: 'Base',
               value: c.baseRev,
               options: c.revisions,
+              now: c.clock(),
               onChanged: (v) => c.setRevisions(base: v),
             ),
             IconButton(
@@ -70,9 +71,11 @@ class CompareBar extends StatelessWidget {
               label: 'Compare',
               value: c.compareRev,
               options: c.revisions,
+              now: c.clock(),
               onChanged: (v) => c.setRevisions(compare: v),
             ),
-            const SizedBox(width: 12),
+            _AgeFilter(controller: c),
+            const SizedBox(width: 4),
             Row(mainAxisSize: MainAxisSize.min, children: [
               Switch(key: const Key('hide-layout'), value: c.hideLayout, onChanged: c.setHideLayout),
               const Text('Hide layout-only'),
@@ -104,52 +107,116 @@ class _Chip extends StatelessWidget {
       );
 }
 
+/// Searchable revision selector: type to filter branches, tags and commits
+/// by name, SHA or commit message.
 class _RevisionPicker extends StatelessWidget {
-  const _RevisionPicker({super.key, required this.label, required this.value, required this.options, required this.onChanged});
+  const _RevisionPicker({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    required this.now,
+  });
 
+  final DateTime now;
   final String label;
   final String? value;
   final List<RevisionOption> options;
   final ValueChanged<String> onChanged;
 
+  static IconData _icon(String kind) => switch (kind) {
+        'branch' => Icons.call_split,
+        'tag' => Icons.sell_outlined,
+        _ => Icons.commit,
+      };
+
   @override
   Widget build(BuildContext context) {
-    final items = [
-      for (final o in options)
-        DropdownMenuItem(
-          value: o.rev,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(
-              switch (o.kind) {
-                'branch' => Icons.call_split,
-                'tag' => Icons.sell_outlined,
-                _ => Icons.commit,
-              },
-              size: 15,
-            ),
+    final hint = Theme.of(context).hintColor;
+    final byRev = {for (final o in options) o.rev: o};
+    final selectedLabel = byRev[value]?.label;
+    return DropdownMenu<String>(
+      // Rebuild (and reset the typed text) when the selection changes.
+      key: ValueKey('$label|$value|${options.length}'),
+      initialSelection: byRev.containsKey(value) ? value : null,
+      label: Text(label),
+      width: 270,
+      menuHeight: 420,
+      enableFilter: true,
+      requestFocusOnTap: true,
+      leadingIcon: const Icon(Icons.search, size: 18),
+      textStyle: monoFont,
+      hintText: 'Search branches, tags, commits',
+      filterCallback: (entries, filter) {
+        final keep = {for (final o in searchRevisions(options, filter, selectedLabel: selectedLabel)) o.rev};
+        return [for (final e in entries) if (keep.contains(e.value)) e];
+      },
+      dropdownMenuEntries: [
+        for (final o in options)
+          DropdownMenuEntry(
+            value: o.rev,
+            label: o.label,
+            leadingIcon: Icon(_icon(o.kind), size: 16),
+            labelWidget: Row(children: [
+              Flexible(flex: 3, child: Text(o.label, style: monoFont, overflow: TextOverflow.ellipsis, maxLines: 1)),
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 2,
+                child: Text(
+                  [o.detail, if (o.date != null) ago(o.date!, now)].join(' · '),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(fontSize: 12, color: hint),
+                ),
+              ),
+            ]),
+          ),
+      ],
+      onSelected: (v) {
+        if (v != null && v != value) onChanged(v);
+      },
+    );
+  }
+}
+
+/// Which branches (and commits) the selectors offer, by age of their last commit.
+class _AgeFilter extends StatelessWidget {
+  const _AgeFilter({required this.controller});
+
+  final DiffController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final current = DiffController.ageFilters.firstWhere((f) => f.$2 == c.maxAge, orElse: () => ('custom', c.maxAge)).$1;
+    final hidden = c.hiddenBranches;
+    return PopupMenuButton<int>(
+      key: const Key('age-filter'),
+      tooltip: 'Offer only branches and commits with recent activity',
+      onSelected: (i) => c.setMaxAge(DiffController.ageFilters[i].$2),
+      itemBuilder: (context) => [
+        for (var i = 0; i < DiffController.ageFilters.length; i++)
+          CheckedPopupMenuItem(
+            value: i,
+            checked: DiffController.ageFilters[i].$2 == c.maxAge,
+            child: Text(DiffController.ageFilters[i].$2 == null
+                ? 'All branches'
+                : 'Active in the last ${DiffController.ageFilters[i].$1}'),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.filter_list, size: 18),
+          const SizedBox(width: 4),
+          Text(c.maxAge == null ? 'All branches' : 'Active ≤ $current'),
+          if (hidden > 0) ...[
             const SizedBox(width: 6),
-            Text(o.label, style: monoFont),
-            const SizedBox(width: 8),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
-              child: Text(o.detail, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
-            ),
-          ]),
-        ),
-    ];
-    final known = options.any((o) => o.rev == value);
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Text(label.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Theme.of(context).hintColor)),
-      const SizedBox(width: 6),
-      DropdownButton<String>(
-        value: known ? value : null,
-        hint: Text(value ?? '—', style: monoFont),
-        items: items,
-        selectedItemBuilder: (_) => [for (final o in options) Center(child: Text(o.label, style: monoFont))],
-        onChanged: (v) => v == null ? null : onChanged(v),
-        underline: const SizedBox.shrink(),
-        isDense: true,
+            Text('($hidden hidden)', style: TextStyle(color: Theme.of(context).hintColor)),
+          ],
+        ]),
       ),
-    ]);
+    );
   }
 }

@@ -23,9 +23,17 @@ void main() {
     final refs = await source.refs();
     expect({for (final r in refs) r.name: r.kind}, {
       'feature/eu-orders': RefKind.branch,
+      'hotfix/load-timeout': RefKind.branch,
       'main': RefKind.branch,
       'v1.0': RefKind.tag,
     });
+  });
+
+  test('refs carry the date of their last commit', () async {
+    final dates = {for (final r in await source.refs()) r.name: r.date!.toUtc()};
+    expect(dates['feature/eu-orders'], DateTime.utc(2026, 10, 4, 14, 15));
+    expect(dates['hotfix/load-timeout'], DateTime.utc(2025, 12, 1, 10, 20));
+    expect(dates['v1.0'], DateTime.utc(2026, 9, 2, 8, 30));
   });
 
   test('log of a branch, of all refs, and of one path', () async {
@@ -34,7 +42,7 @@ void main() {
       'Tidy weekly_rollup canvas',
       'Initial export of Sales project',
     ]);
-    expect(await source.log(all: true), hasLength(5));
+    expect(await source.log(all: true), hasLength(6));
     final history = await source.log(rev: 'feature/eu-orders', path: dailyLoadPath);
     expect(history.map((c) => c.subject), ['Log load failures', 'EU region split', 'Initial export of Sales project']);
     expect(history.first.author, 'Mo Developer');

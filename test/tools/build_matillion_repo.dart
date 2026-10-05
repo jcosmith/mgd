@@ -545,7 +545,16 @@ void main(List<String> args) {
   write(ordersEnrichPath, ordersEnrich(version: 1));
   write(legacyCustomersPath, legacyCustomers());
   write(weeklyRollupPath, weeklyRollup(tidied: false));
-  commit('Initial export of Sales project', '2026-08-12T09:00:00+02:00');
+  commit('Initial export of Sales project', '2025-11-03T09:00:00+01:00');
+
+  // hotfix/load-timeout: a stale branch (last commit long ago), for the
+  // "recently active branches" filter.
+  git(['checkout', '-q', '-b', 'hotfix/load-timeout']);
+  write(dailyLoadPath, dailyLoad(version: 1).replaceFirst(
+      '"value":"loginTimeout"},"2":{"slot":2,"type":"STRING","value":"30"}',
+      '"value":"loginTimeout"},"2":{"slot":2,"type":"STRING","value":"60"}'));
+  commit('Increase ERP login timeout', '2025-12-01T11:20:00+01:00');
+  git(['checkout', '-q', 'main']);
 
   // c2 · main: layout-only change
   write(weeklyRollupPath, weeklyRollup(tidied: true));

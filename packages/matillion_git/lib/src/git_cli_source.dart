@@ -52,18 +52,20 @@ final class GitCliSource implements RepositorySource {
 
   @override
   Future<List<RefInfo>> refs() async {
+    // %(*…) are the values of the commit an annotated tag points to.
     final out = await git.run('for-each-ref', [
-      '--format=%(refname)%1f%(objectname)%1f%(*objectname)',
+      '--format=%(refname)%1f%(objectname)%1f%(*objectname)%1f%(committerdate:iso-strict)%1f%(*committerdate:iso-strict)',
       'refs/heads',
       'refs/tags',
     ]);
     return [
       for (final line in out.split('\n').where((l) => l.isNotEmpty))
-        if (line.split('\x1f') case [final ref, final sha, final peeled])
+        if (line.split('\x1f') case [final ref, final sha, final peeled, final date, final peeledDate])
           RefInfo(
             name: ref.replaceFirst(RegExp(r'^refs/(heads|tags)/'), ''),
             sha: peeled.isNotEmpty ? peeled : sha,
             kind: ref.startsWith('refs/tags/') ? RefKind.tag : RefKind.branch,
+            date: DateTime.tryParse(peeledDate.isNotEmpty ? peeledDate : date),
           ),
     ];
   }

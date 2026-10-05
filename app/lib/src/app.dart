@@ -9,6 +9,7 @@ import 'widgets/compare_bar.dart';
 import 'widgets/object_view.dart';
 import 'widgets/objects_panel.dart';
 import 'widgets/repository_picker.dart';
+import 'widgets/split_pane.dart';
 
 class MatillionDiffApp extends StatelessWidget {
   const MatillionDiffApp({super.key, required this.session});
@@ -21,6 +22,7 @@ class MatillionDiffApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: buildTheme(Brightness.light),
         darkTheme: buildTheme(Brightness.dark),
+        builder: (context, child) => LayoutScope(prefs: session.layout, child: child!),
         home: HomePage(session: session),
       );
 }
@@ -66,6 +68,7 @@ class Workbench extends StatelessWidget {
         const SingleActivator(LogicalKeyboardKey.bracketLeft): () => controller.step(-1),
         const SingleActivator(LogicalKeyboardKey.keyL): () => controller.setHideLayout(!controller.hideLayout),
         const SingleActivator(LogicalKeyboardKey.keyO, control: true): () => onChangeRepository?.call(),
+        const SingleActivator(LogicalKeyboardKey.keyB, control: true): () => LayoutScope.of(context).objects.toggle(),
       },
       child: Focus(
         autofocus: true,
@@ -101,11 +104,14 @@ class Workbench extends StatelessWidget {
                     ),
                   );
                 }
-                return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  SizedBox(width: 300, child: Material(color: Theme.of(context).colorScheme.surface, child: panel)),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: view),
-                ]);
+                return SplitPane(
+                  state: LayoutScope.of(context).objects,
+                  panelName: 'changed objects (Ctrl+B)',
+                  handleKey: const Key('objects-handle'),
+                  minSize: 180,
+                  panel: Material(color: Theme.of(context).colorScheme.surface, child: panel),
+                  body: view,
+                );
               });
             }
             return Scaffold(

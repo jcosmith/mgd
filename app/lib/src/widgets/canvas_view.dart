@@ -6,6 +6,7 @@ import 'package:matillion_core/matillion_core.dart';
 import '../controller.dart';
 import '../theme.dart';
 import 'common.dart';
+import 'split_pane.dart';
 
 enum CanvasMode { overlay, sideBySide, before, after }
 
@@ -29,24 +30,35 @@ class _CanvasViewState extends State<CanvasView> {
     final colors = DiffColors.of(context);
     final showMoves = !c.hideLayout;
     final selected = widget.diff.components.where((x) => x.id == c.selectedComponentId).firstOrNull;
+    final layout = LayoutScope.of(context);
+
+    void select(int? id) {
+      c.selectComponent(id);
+      // Selecting a component reveals the details panel.
+      if (id != null && layout.details.collapsed) layout.details.toggle();
+    }
 
     Widget pane(CanvasMode m, String label) => _GraphPane(
           key: ValueKey('${widget.diff.path}|$m'),
           graph: _Graph.build(widget.diff, m, showMoves: showMoves),
           label: label,
           selectedId: c.selectedComponentId,
-          onSelect: c.selectComponent,
+          onSelect: select,
         );
 
     final stage = switch (mode) {
       CanvasMode.overlay => pane(mode, 'Overlay'),
       CanvasMode.before => pane(mode, 'Base'),
       CanvasMode.after => pane(mode, 'Compare'),
-      CanvasMode.sideBySide => Row(children: [
-          Expanded(child: pane(CanvasMode.before, 'Base')),
-          const VerticalDivider(width: 1),
-          Expanded(child: pane(CanvasMode.after, 'Compare')),
-        ]),
+      CanvasMode.sideBySide => SplitPane(
+          state: layout.sideBySide,
+          collapsible: false,
+          minSize: 200,
+          minBody: 200,
+          handleKey: const Key('side-by-side-handle'),
+          panel: pane(CanvasMode.before, 'Base'),
+          body: pane(CanvasMode.after, 'Compare'),
+        ),
     };
 
     Widget legend(String label, Color border, Color fill, {bool dashed = false}) => Row(mainAxisSize: MainAxisSize.min, children: [
@@ -83,11 +95,24 @@ class _CanvasViewState extends State<CanvasView> {
         ]),
       ),
       const Divider(),
-      Expanded(child: stage),
-      if (selected != null) ...[
-        const Divider(),
-        SizedBox(height: 180, child: _Details(selected, sqlDialect: c.variant.sqlDialect, onClose: () => c.selectComponent(null))),
-      ],
+      Expanded(
+        child: SplitPane(
+          state: layout.details,
+          axis: Axis.vertical,
+          panelFirst: false,
+          minSize: 90,
+          minBody: 160,
+          panelName: 'component details',
+          handleKey: const Key('details-handle'),
+          body: stage,
+          panel: selected == null
+              ? Center(
+                  child: Text('Click a component on the canvas to see what changed in it.',
+                      style: TextStyle(color: Theme.of(context).hintColor)),
+                )
+              : _Details(selected, sqlDialect: c.variant.sqlDialect, onClose: () => c.selectComponent(null)),
+        ),
+      ),
     ]);
   }
 }

@@ -21,14 +21,20 @@ the `implementationID`s come from `.docs/implementation_id_to_type.json`.
 History:
 
 ```
-* 41443ae (feature/eu-orders) Log load failures
-* 670a5cd EU region split          daily_load: remove step, rename, SQL change, move;
-|                                  t_orders_enrich: grid rows; delete t_legacy_customers; add init_env
-| * 8d852d1 (main, HEAD) Update Matillion ETL build version     (.build_version only)
+* 8dcd57a (feature/eu-orders) Log load failures                  2026-10-04
+* 761026c EU region split                                        2026-10-02
+|   daily_load: remove step, rename, SQL change, move; t_orders_enrich: grid rows;
+|   delete t_legacy_customers; add init_env
+| * 9c55e48 (main, HEAD) Update Matillion ETL build version      2026-10-03  (.build_version only)
 |/
-* dbab864 (tag: v1.0) Tidy weekly_rollup canvas                  (layout-only change)
-* 28fea84 Initial export of Sales project
+* 256fd43 (tag: v1.0) Tidy weekly_rollup canvas                  2026-09-02  (layout-only change)
+| * da02603 (hotfix/load-timeout) Increase ERP login timeout     2025-12-01  (stale branch)
+|/
+* 3cca1dd Initial export of Sales project                        2025-11-03
 ```
+
+`hotfix/load-timeout` has not been touched for months, so the app's default
+"active in the last 6 months" branch filter hides it.
 
 ### Why `.gitted` instead of `.git`
 

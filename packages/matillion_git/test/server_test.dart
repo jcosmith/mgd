@@ -70,7 +70,8 @@ void main() {
   test('refs, log and files over HTTP', () async {
     final remote = HttpRepositorySource(base);
     expect((await remote.refs()).map((r) => r.name), containsAll(['main', 'feature/eu-orders', 'v1.0']));
-    expect(await remote.log(all: true), hasLength(5));
+    expect(await remote.log(all: true), hasLength(6));
+    expect((await remote.refs()).firstWhere((r) => r.name == 'hotfix/load-timeout').date, isNotNull);
     expect((await remote.info()).headRef, 'main');
     expect(await remote.readFile('main', 'nope.txt'), isNull);
     expect(await remote.readFile('v1.0', '.build_version'), contains('1.75.6'));

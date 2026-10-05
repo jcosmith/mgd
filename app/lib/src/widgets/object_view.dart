@@ -9,7 +9,7 @@ import 'json_view.dart';
 import 'structure_view.dart';
 import 'summary_view.dart';
 
-/// Center pane: one object, several lenses (Summary, Structure, JSON, Canvas).
+/// Center pane: one object, several lenses. Canvas is the default lens.
 class ObjectView extends StatelessWidget {
   const ObjectView({super.key, required this.controller});
 
@@ -54,16 +54,16 @@ class ObjectView extends StatelessWidget {
         const TabBar(
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          tabs: [Tab(text: 'Summary'), Tab(text: 'Structure'), Tab(text: 'JSON'), Tab(text: 'Canvas')],
+          tabs: [Tab(text: 'Canvas'), Tab(text: 'Summary'), Tab(text: 'Structure'), Tab(text: 'JSON')],
         ),
         Expanded(
           child: TabBarView(
             physics: const NeverScrollableScrollPhysics(),
             children: [
+              CanvasView(diff: diff, controller: c),
               SummaryView(diff: diff, controller: c),
               StructureView(diff: diff, controller: c),
               JsonDiffView(diff: diff),
-              CanvasView(diff: diff, controller: c),
             ],
           ),
         ),

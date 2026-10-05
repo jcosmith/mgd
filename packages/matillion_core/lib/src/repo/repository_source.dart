@@ -7,16 +7,24 @@ library;
 enum RefKind { branch, tag }
 
 final class RefInfo {
-  const RefInfo({required this.name, required this.sha, required this.kind});
+  const RefInfo({required this.name, required this.sha, required this.kind, this.date});
 
   /// Short name, e.g. `main`, `feature/eu-orders`, `v1.0`.
   final String name;
   final String sha;
   final RefKind kind;
 
-  Map<String, Object?> toJson() => {'name': name, 'sha': sha, 'kind': kind.name};
-  factory RefInfo.fromJson(Map<String, dynamic> j) =>
-      RefInfo(name: j['name'] as String, sha: j['sha'] as String, kind: RefKind.values.byName(j['kind'] as String));
+  /// Commit date of the commit the ref points to (its last activity).
+  final DateTime? date;
+
+  Map<String, Object?> toJson() =>
+      {'name': name, 'sha': sha, 'kind': kind.name, if (date != null) 'date': date!.toIso8601String()};
+  factory RefInfo.fromJson(Map<String, dynamic> j) => RefInfo(
+        name: j['name'] as String,
+        sha: j['sha'] as String,
+        kind: RefKind.values.byName(j['kind'] as String),
+        date: j['date'] == null ? null : DateTime.parse(j['date'] as String),
+      );
 }
 
 final class CommitInfo {

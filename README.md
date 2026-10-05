@@ -48,7 +48,18 @@ For development with hot reload, start the server without `--web` and with
 `--allow-origin http://localhost:5000`, then run
 `flutter run -d chrome --web-port 5000 --dart-define=API_BASE=http://127.0.0.1:8686/` in `app/`.
 
-Keyboard: `[` / `]` previous/next object, `L` toggles layout-only changes, `Ctrl+O` opens another repository.
+Using the workbench:
+
+* Each job opens on the **Canvas**; Summary, Structure and JSON are the other tabs.
+* Panels are resizable: drag a divider, or click its chevron to collapse or
+  expand it (changed-objects list, canvas details, side-by-side canvases).
+* The Base and Compare selectors are searchable: type part of a branch or tag name,
+  a commit message or a SHA. They offer branches and commits with activity in
+  the last 6 months; change this with the filter next to them (1 month to all
+  branches). Tags, the checked-out branch and the current selection are always
+  offered.
+* Keyboard: `[` / `]` previous/next object, `L` toggles layout-only changes,
+  `Ctrl+B` toggles the changed-objects panel, `Ctrl+O` opens another repository.
 
 ## Test
 

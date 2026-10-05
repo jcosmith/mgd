@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:matillion_core/matillion_core.dart';
 
 import 'controller.dart';
+import 'widgets/split_pane.dart';
 
 typedef SourceFactory = Future<RepositorySource> Function(String path);
 
@@ -9,10 +10,16 @@ typedef SourceFactory = Future<RepositorySource> Function(String path);
 /// [DiffController]; the previous one stays until the new one has loaded, so a
 /// wrong pick never leaves the user with an empty screen.
 class RepoSession extends ChangeNotifier {
-  RepoSession({required this.browser, required this.openSource, this.initialPath});
+  RepoSession({required this.browser, required this.openSource, this.initialPath, this.clock});
 
   final RepositoryBrowser browser;
   final SourceFactory openSource;
+
+  /// Time source for the branch age filter (tests pin it).
+  final DateTime Function()? clock;
+
+  /// Panel sizes, kept across repositories.
+  final layout = LayoutPrefs();
 
   /// Repository to open first (e.g. from the page URL's `?repo=`).
   final String? initialPath;
@@ -45,7 +52,11 @@ class RepoSession extends ChangeNotifier {
     openError = null;
     notifyListeners();
     try {
-      final controller = DiffController(await openSource(repoPath));
+      final controller = DiffController(
+        await openSource(repoPath),
+        clock: clock,
+        maxAge: diff == null ? DiffController.defaultMaxAge : diff!.maxAge,
+      );
       await controller.init();
       if (controller.error != null) {
         openError = controller.error;
