@@ -42,6 +42,7 @@ jobs:
   bundle:
     needs: web
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -73,7 +74,9 @@ jobs:
         run: flutter pub get
 
       - name: Compile server
-        run: dart compile exe packages/matillion_git/bin/serve.dart -o "dist/$BUNDLE/${{ matrix.exe }}"
+        run: |
+          mkdir -p "dist/$BUNDLE"
+          dart compile exe packages/matillion_git/bin/serve.dart -o "dist/$BUNDLE/${{ matrix.exe }}"
 
       - name: Add web build
         uses: actions/download-artifact@v8
